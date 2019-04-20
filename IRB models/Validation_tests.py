@@ -4,14 +4,16 @@
 ###          -Look into the possibilty to resolve cartesion product for large lists in AUC function
 ########################################################################################################################
 from scipy.stats import beta
+from scipy.stats import norm
 from scipy.stats import binom
+from scipy.stats import t
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import math
 
 class PD_tests(object):
-     
+
      ###Discrimantory power test: Area Under the Curve###
      def AUC(self, x, y, z):
           #x : Observed parameter
@@ -81,8 +83,138 @@ class PD_tests(object):
         df_herf_agg = df_herf.groupby('grade').agg({'grade':'count'})
         df_herf_agg['R_i'] = df_herf_agg['grade'] / df_herf_agg.grade.sum()
         df_herf_agg['CV_contrib'] = (df_herf_agg['R_i'] - 1 / len(df_herf_agg)) ** 2
-        CV = (df_herf_agg['CV_contrib'].sum())**(1/2)
+        CV = (len(df_herf_agg) * df_herf_agg['CV_contrib'].sum())**(1/2)
         HI = 1 + math.log((CV**2 + 1) / len(df_herf_agg)) / math.log(len(df_herf_agg))
         CV_p_val = "placeholder" #CV initial period to be computed and both are to be compared.
         
         return CV, HI, CV_p_val
+
+     def MWB(self, abs_freq, rel_freq):
+        """
+        Compute the matrix weighted bandwidth metric (§ 2.5.5.1);
+        :param abs_freq: transition matrix(KxK)with number of customer changes per grades;
+        :param rel_freq: transition matrix(KxK) with relative frequency of customer grade change.
+        :return: upper_MWB: upper matrix bandwidth metric, lower_MWB: lower matrix bandwidth metric.
+        """""
+         
+        abs_freq = abs_freq.as_matrix()
+        rel_freq = rel_freq.as_matrix()
+
+        n_i = abs_freq.sum(axis = 1)
+        K = len(abs_freq)
+         
+        M_norm_u = 0
+        for i in range(1, K - 1):
+            M_scalar_i = 0
+            sum_rel_frq_row = 0
+            for j in range(i+1, K):
+                M_scalar_i = max(abs(i - K), abs(i-1))
+                sum_rel_frq_row = sum_rel_frq_row + rel_freq[i,j]
+        
+            M_norm_u += M_scalar_i * sum_rel_frq_row * n_i[i]
+        
+        M_norm_l = 0
+        for i in range(2, K):
+            M_scalar_i = 0
+            sum_rel_frq_row = 0
+            for j in range(1, i - 1):
+                M_scalar_i = max(abs(i - K), abs(i-1))
+                sum_rel_frq_row = sum_rel_frq_row + rel_freq[i,j]
+            
+            M_norm_l += M_scalar_i * sum_rel_frq_row * n_i[i]
+        
+        temp = 0
+        for i in range(1, K-1):
+            for j in range(i + 1, K):
+                temp += np.abs(i - j) * n_i[i] * rel_freq[i, j]
+        upper_MWB = (1 / M_norm_u) * temp 
+        
+        temp = 0
+        for i in range(2, K):
+            for j in range(1, i - 1):
+                temp += np.abs(i - j) * n_i[i] * rel_freq[i, j]
+        lower_MWB = (1 / M_norm_l) * temp
+        
+        
+        return upper_MWB, lower_MWB
+
+     def stability_migration_matrix(self, abs_freq, rel_freq):
+         """
+         Compute the migration stability matrix metrics (§ 2.5.5.2);
+         To be reported to the regulator: the relative frequencies of transitions between rating grades, values
+         for the test statistic z_ij and associated p-values.
+         :param abs_freq: transition matrix (KxK) with number of customer changes per grades;
+         :param rel_freq: transition matrix (KxK) with relative frequency of customer grade change.
+         :return: z_up, z_low, zUP_pval, zDOWN_pval
+         """
+         N = abs_freq.sum(axis=1).values
+         p = rel_freq.as_matrix()
+         K = len(p)
+
+         z_up = np.zeros(p.shape)
+         for i in range(1, K - 1):
+             for j in range(i + 1, K):
+                 up = p[i, j - 1] - p[i, j]
+                 down = np.sqrt(
+                 (p[i, j] * (1 - p[i, j]) + p[i, j - 1] * (1 - p[i, j - 1]) + 2 * p[i, j] * p[i, j - 1]) / N[i])
+                 z_up[i, j] = up / down
+
+         z_low = np.zeros(p.shape)
+         for i in range(1, K):
+             for j in range(0, i):
+                 up = p[i, j + 1] - p[i, j]
+                 down = np.sqrt(
+                 (p[i, j] * (1 - p[i, j]) + p[i, j + 1] * (1 - p[i, j + 1]) + 2 * p[i, j] * p[i, j + 1]) / N[i])
+                 z_low[i, j] = up / down
+         zUP_pval= norm.sf(abs(z_up)) # one-sided
+         zDOWN_pval = norm.sf(abs(z_low)) # one-sided
+
+         return z_up, z_low, zUP_pval, zDOWN_pval
+
+class LGD_tests(object):
+
+    def backtesting(self, data_set):
+        """
+        NOT THE FINAL VERSION
+        LGD Back-testing using a t-test.
+        Null-hypothesis is: estimatedLGD > realisedLGD. The test statistic is asymptotically Student-t distributed with
+        N-1 degrees of freedom.
+        :param data_set: development/monitoring sets
+        :return:
+        """
+        #### Select estimated and realised LGDs for defaulting facilities
+        estimatedLGD = data_set[data_set.Default_Binary == 1].LGD_predicted
+        realisedLGD = data_set[data_set.Default_Binary == 1].LGD_realised
+        N = len(data_set[data_set.Default_Binary == 1])
+
+        ### Construct test statistic 2.6.2.1
+        s2 = (((realisedLGD - estimatedLGD).sum() - (realisedLGD - estimatedLGD).mean() )**2 ) / (N - 1)
+        t_stat = np.sqrt(N) * ((realisedLGD - estimatedLGD).mean()) / np.sqrt( s2 )
+
+        pval = 1 - t.cdf(t_stat, df=N-1) #one-sided
+
+        return pval
+    
+class CCF_tests(object):
+    
+    def backtesting(self, data_set):
+        
+        #### Select estimated and realised LGDs for defaulting facilities
+        estimatedCCF = data_set.CCF_predicted
+        realisedCCF = data_set.CCF_realised
+        R = len(data_set)
+        
+        ### Construct test statistic 2.9.3.1
+        s2 = (((realisedCCF - estimatedCCF).sum() - (realisedCCF - estimatedCCF).mean() )**2 ) / (R - 1)
+        t_stat = np.sqrt(R) * ((realisedCCF - estimatedCCF).mean()) / np.sqrt( s2 )
+
+        CCF_pval = 1 - t.cdf(t_stat, df=R-1) #one-sided
+        
+        return CCF_pval
+    
+    def gAUC(self, data_set):
+        #predicted = predicted CCFs
+        #realized = realized CCFs
+        
+        
+        return gAUC, s2
