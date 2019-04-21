@@ -3,6 +3,7 @@ import os
 import datetime
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 from sklearn import preprocessing
 
 class data_model(object):
@@ -32,6 +33,21 @@ class data_model(object):
         #Default definition (given in the data model)
         dflt_definition = ['Default', 'Charged Off', 'Late (31-120 days)', 'Late (16-30 days)', 'Does not meet the credit policy. Status:Charged Off']
         df['Default_Binary'] = df.loan_status.apply(lambda s : 1 if s in dflt_definition else 0)
+
+#         ### LGD variable ###
+#         df['months'] = [int(x[1:3]) for x in df.term]
+#         df['LGD_Interval'] = df['total_pymnt'] / (df['months'] * df['installment'])
+#
+# #        for x in range(len(df.LGD_Interval)):
+# #            if x < "0":
+# #                x = 0
+# #            elif x > "1":
+# #                x = 1
+#
+#         visual = df.head(100)
+#
+#         df["LGD_Interval"] = 0
+#         df["LGD_Interval"] = df.LGD_Interval.apply(lambda d: random.random())
 
         ###Transform cathegorical variables to DRs###
         def catVAR2num(t, var, var_agr):
@@ -63,6 +79,17 @@ class data_model(object):
         ###Ratio example###
         df['Income2TB'] = df['annual_inc'] / df['tot_cur_bal']
         ScaleNUM(df, 'Income2TB')
+
+        ### Add actual LGD value
+        df.term = df.term.str.replace(" months", "").astype(dtype=np.float64)
+        df["EAD"] = df.installment * df.term - df.total_pymnt  # Original amout - Amount already paid
+        end_date = datetime.date(2016, 1, 1)
+        time_in_default = end_date - df.Default_date
+        df["time_in_default"] = time_in_default.apply(lambda d: d.days / 365)
+        df["LGD_realised"] = (df.EAD + df.collection_recovery_fee - df.recoveries * (
+                                                 1 + df.int_rate/100) ** (-df.time_in_default)) / (
+                                             df.EAD + df.collection_recovery_fee)
+        df["LGD_realised"] = np.minimum(1, np.maximum(0, df.LGD_realised) )
 
         # Define development period and monitoring period
         df_dev = df[(df.issue_dt < self.ldate)] # Application before ldate
