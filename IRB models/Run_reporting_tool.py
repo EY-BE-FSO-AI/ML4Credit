@@ -241,10 +241,39 @@ development_set["CCF_realised_grade"] = pd.cut(x = development_set['CCF_realised
 development_set["CCF_predicted_grade"] = pd.cut(x = development_set['CCF_predicted'], bins= data_q_bins, right=False, include_lowest = True)
 CCF_transition_matrix = development_set.groupby("CCF_predicted_grade").CCF_realised_grade.value_counts().unstack().fillna(0) 
 
+def A_lower_ij(trans_matrix, i, j):
+    temp = 0
+    for k in range (0, i):
+        for l in range(0,j):
+            temp += trans_matrix.loc[k,l]        
+    return temp
+
+def A_higher_ij(trans_matrix, i, j):
+    temp = 0
+    for k in range (i +1, len(trans_matrix)):
+        for l in range(j +1,len(trans_matrix)):
+            temp += trans_matrix.loc[k,l]      
+    return temp
+
+
+CCF_transition_matrix_A = np.zeros((len(CCF_transition_matrix), len(CCF_transition_matrix)))
+for i in range(0, len(CCF_transition_matrix)):
+    for j in range(0, len(CCF_transition_matrix)):
+        if i == j:
+            CCF_transition_matrix_A[i,j]  = 0
+        else:
+            CCF_transition_matrix_A[i,j] = A_lower_ij(CCF_transition_matrix,i,j) + A_higher_ij(CCF_transition_matrix,i,j) 
+
+
+
+
+
 CCF_gAUC = CCF_tests().gAUC(gAUC_data_CCF)
 
 ### Slotting approach for specialised lending exposures
 # To be developped
+
+
 
 
 
