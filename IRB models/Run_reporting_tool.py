@@ -78,7 +78,6 @@ FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_n
 LABEL = 'CCF_realised'
 development_set, monitoring_set = model().CCF_model(FEATURES, LABEL, development_set, monitoring_set, 'CCF_predicted')
 #development_set.CCF_predicted.hist()
-development_set.CCF_predicted.hist()
 
 ### Clusters of LGD
 development_set["lgd_q"] = pd.qcut(development_set.LGD_predicted, q = 40, labels=np.arange(0,40))
@@ -217,64 +216,45 @@ CV, HI, CV_p_val = PD_tests().Herfindahl(development_set)
 CCF_pval = CCF_tests().backtesting(development_set)
 
 
-### Discriminatory power (2.9.4) 
-
-development_set["CCF_predicted"] = np.minimum(100, np.maximum(0, development_set["CCF_predicted"].values))
-development_set["CCF_realised"] = np.minimum(100, np.maximum(0, development_set["CCF_realised"].values))
+### Discriminatory power (2.9.4)
 
 ### gAUC (2.9.4.1)
 
 ### Clusters of CCF
-Data_q['A'] = development_set['CCF_predicted']
-Data_q['B'] = development_set['CCF_predicted']
+def create_transitionMatrix(data_set, CCF = True):
+    """
+    Create CCF/LGD transition matrix.
+    :param data_set: development/monitoring pandas dataframe.
+    :return: transition matrix.
+    """
+    metric = "CCF" if CCF else "LGD"
+    data_set["%s_predicted" %metric] = np.minimum(100, np.maximum(0, data_set["%s_predicted" %metric].values))
+    data_set["%s_realised" %metric] = np.minimum(100, np.maximum(0, data_set["%s_realised" %metric].values))
 
-model = KMeans(n_clusters=7)
-model.fit(Data_q)
-Data_q["cluster_num"] = model.labels_
- 
-minmax_data_q = Data_q.groupby('cluster_num').agg({'A' : ['min', 'max']}).sort_values(by= ('A', 'min'))
-data_q_bins = (minmax_data_q["A"]["max"].shift(1) + minmax_data_q["A"]["min"]) / 2
-data_q_bins.iloc[0] = 0
-data_q_bins.loc[7] = 100
+    Data_q = pd.DataFrame()
+    Data_q['A'] = data_set['%s_predicted' %metric]
+    Data_q['B'] = data_set['%s_predicted' %metric]
 
-development_set["CCF_realised_grade"] = pd.cut(x = development_set['CCF_realised'], bins= data_q_bins, right=False, include_lowest = True)  
-development_set["CCF_predicted_grade"] = pd.cut(x = development_set['CCF_predicted'], bins= data_q_bins, right=False, include_lowest = True)
-CCF_transition_matrix = development_set.groupby("CCF_predicted_grade").CCF_realised_grade.value_counts().unstack().fillna(0) 
+    num_clusters = 7
+    model = KMeans(n_clusters= num_clusters)
+    model.fit(Data_q)
+    Data_q["cluster_num"] = model.labels_
 
-def A_lower_ij(trans_matrix, i, j):
-    temp = 0
-    for k in range (0, i):
-        for l in range(0,j):
-            temp += trans_matrix.loc[k,l]        
-    return temp
+    minmax_data_q = Data_q.groupby('cluster_num').agg({'A' : ['min', 'max']}).sort_values(by= ('A', 'min'))
+    data_q_bins = (minmax_data_q["A"]["max"].shift(1) + minmax_data_q["A"]["min"]) / 2
+    data_q_bins.iloc[0] = 0
+    data_q_bins.loc[num_clusters] = 100
 
-def A_higher_ij(trans_matrix, i, j):
-    temp = 0
-    for k in range (i +1, len(trans_matrix)):
-        for l in range(j +1,len(trans_matrix)):
-            temp += trans_matrix.loc[k,l]      
-    return temp
+    data_set["%s_realised_grade" %metric] = pd.cut(x = data_set['%s_realised' %metric], bins= data_q_bins, right=False, include_lowest = True)
+    data_set["%s_predicted_grade" %metric] = pd.cut(x = data_set['%s_predicted' %metric], bins= data_q_bins, right=False, include_lowest = True)
+    transition_matrix = data_set.groupby("%s_predicted_grade" %metric).CCF_realised_grade.value_counts().unstack().fillna(0)
+    return transition_matrix
 
-
-CCF_transition_matrix_A = np.zeros((len(CCF_transition_matrix), len(CCF_transition_matrix)))
-for i in range(0, len(CCF_transition_matrix)):
-    for j in range(0, len(CCF_transition_matrix)):
-        if i == j:
-            CCF_transition_matrix_A[i,j]  = 0
-        else:
-            CCF_transition_matrix_A[i,j] = A_lower_ij(CCF_transition_matrix,i,j) + A_higher_ij(CCF_transition_matrix,i,j) 
-
-
-
-
-
-CCF_gAUC = CCF_tests().gAUC(gAUC_data_CCF)
+dev_CCF_transition_matrix = create_transitionMatrix(development_set)
+mon_CCF_transition_matrix = create_transitionMatrix(monitoring_set)
+CCF_gAUC = CCF_tests().gAUC_CCF(mon_CCF_transition_matrix, dev_CCF_transition_matrix)
 
 ### Slotting approach for specialised lending exposures
-# To be developped
-
-
-
-
+# To be developed
 
 
