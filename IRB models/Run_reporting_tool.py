@@ -52,13 +52,16 @@ FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_n
             'funded_amnt_scaled', 'int_rate_scaled', 'inq_last_6mths_scaled', 'Income2TB_scaled']
 LABEL = 'CCF_realised'
 development_set, monitoring_set = model().CCF_model(FEATURES, LABEL, development_set, monitoring_set, 'CCF')
-development_set.CCF.hist()
+
+FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_num']
+LABEL = 'CCF_realised'
+development_set, monitoring_set = model().CCF_model(FEATURES, LABEL, development_set, monitoring_set, 'CCF_')
 
 ###Bin PDs
 development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'PD', 'Default_Binary', 75)
 ###Bin CCF
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF', 'CCF_realised', 75)
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF_realised', 'CCF_realised', 75)
+development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF',  'CCF_realised', 75)
+development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF_', 'CCF_realised', 75)
 ### Bin LGD
 development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'LGD', 'LGD_realised', 75)
 
@@ -113,7 +116,7 @@ plt.boxplot(AUC_bootstrap)
 ### Stability (2.5.5)
 
 # Excluding defaulting customers
-transition_matrix        = development_set[development_set.Default_Binary == 0].groupby("grade").Bin_PD.value_counts().unstack().fillna(0)
+transition_matrix        = development_set[development_set.Default_Binary == 0].groupby(['grade_num', 'Bin_PD']).size().unstack(fill_value=0)
 transition_matrix_freq   = transition_matrix / transition_matrix.sum(axis=0)
 n_i                      = transition_matrix.sum(axis=1)
 
@@ -150,7 +153,7 @@ CCF_pval = CCF_tests().backtesting(development_set)
 
 ### Discriminatory power (2.9.4) 
 
-gAUC_data_CCF = development_set[['Bin_CCF', 'Bin_CCF_realised']]
+gAUC_data_CCF = development_set[['Bin_CCF', 'Bin_CCF_']]
 
 ### Clusters of CCF
 def create_transitionMatrix(data_set, CCF = True):

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import pandas            as pd
 import numpy             as np
 import itertools
@@ -83,8 +82,8 @@ class model(object):
 
      def binning_monotonic(self, development, monitoring, var, var2, quantiles):
           development["Quantiles"]      = pd.to_numeric(pd.qcut(development[var], q = quantiles, labels=np.arange(0, quantiles))) #Calculate quantiles
-          t1                            = pd.merge(    development.groupby(["Quantiles"], as_index=False).agg({var: [np.min, np.max]}), \
-                                                       development.groupby(["Quantiles"], as_index=False).agg({var2: [np.mean]}) \
+          t1                            = pd.merge(    development[['Quantiles', var ]].astype(float).groupby('Quantiles', as_index=False).agg({var: [np.min, np.max]}), \
+                                                       development[['Quantiles', var2]].astype(float).groupby('Quantiles', as_index=False).agg({var2: [np.mean]}) \
                                                        , on='Quantiles', how='inner') #Calculate mean of the realised values for a given interval of modelled values
           t1.columns                    = ["Quantiles", "MIN", "MAX", "Exp"]
           development.drop(['Quantiles'], axis=1, inplace=True)
@@ -117,84 +116,3 @@ class model(object):
           t4        =    pd.DataFrame(np.column_stack([monitoring.values[i], t2.values[j]]),columns=monitoring.columns.append(t2.columns))
           t4.drop(['MIN', 'MAX'], axis=1, inplace=True)
           return t3, t4
-=======
-import pandas as pd
-import itertools
-import tensorflow as tf
-from tensorflow.contrib.learn.python.learn import metric_spec
-from tensorflow.contrib.learn.python.learn.estimators import _sklearn
-from tensorflow.contrib.learn.python.learn.estimators import estimator
-from tensorflow.contrib.learn.python.learn.estimators import model_fn
-from tensorflow.python.framework import ops
-from tensorflow.python.saved_model import loader
-from tensorflow.python.saved_model import tag_constants
-from tensorflow.python.util import compat
-
-class model(object):
-
-     def PD_model(self, FEATURES, LABEL, development, monitoring, var_name):
-     
-          def input_fn(data_set):
-              feature_cols = {k: tf.constant(data_set[k].values) for k in FEATURES} 
-              labels = tf.constant(data_set[LABEL].values)
-              return feature_cols, labels
-              
-          feature_cols = [tf.contrib.layers.real_valued_column(k) for k in FEATURES]
-          
-          regressor = tf.contrib.learn.DNNRegressor(
-            feature_columns=feature_cols, hidden_units=[64, 32, 16], optimizer=tf.train.ProximalAdagradOptimizer(
-                learning_rate=0.1,
-                l1_regularization_strength=0.001) )
-          regressor.fit(input_fn=lambda: input_fn(development), steps=56)
-          
-          y1 = regressor.predict(input_fn=lambda: input_fn(development))
-          y2 = regressor.predict(input_fn=lambda: input_fn(monitoring))
-          development[var_name] = pd.DataFrame(list(itertools.islice(y1, len(development.iloc[:,1])))).values
-          monitoring [var_name] = pd.DataFrame(list(itertools.islice(y2, len(monitoring .iloc[:,1])))).values
-          
-          return development, monitoring
-      
-     def LGD_model(self, FEATURES, LABEL, development, monitoring, var_name):
-
-          def input_fn(data_set):
-              feature_cols = {k: tf.constant(data_set[k].values) for k in FEATURES} 
-              labels = tf.constant(data_set[LABEL].values)
-              return feature_cols, labels
-              
-          feature_cols = [tf.contrib.layers.real_valued_column(k) for k in FEATURES]
-          
-          regressor = tf.contrib.learn.DNNRegressor(
-            feature_columns=feature_cols, hidden_units=[64, 32, 16], optimizer=tf.train.ProximalAdagradOptimizer(
-                learning_rate=0.1,
-                l1_regularization_strength=0.001) )
-          regressor.fit(input_fn=lambda: input_fn(development[development.Default_Binary == 1]), steps=56)
-          
-          y1 = regressor.predict(input_fn=lambda: input_fn(development))
-          y2 = regressor.predict(input_fn=lambda: input_fn(monitoring))
-          development[var_name] = pd.DataFrame(list(itertools.islice(y1, len(development.iloc[:,1])))).values
-          monitoring [var_name] = pd.DataFrame(list(itertools.islice(y2, len(monitoring .iloc[:,1])))).values
-          
-          return development, monitoring
-      
-     def CCF_model(self, FEATURES, LABEL, development, monitoring, var_name):
-     
-          def input_fn(data_set):
-              feature_cols = {k: tf.constant(data_set[k].values) for k in FEATURES} 
-              labels = tf.constant(data_set[LABEL].values)
-              return feature_cols, labels
-              
-          feature_cols = [tf.contrib.layers.real_valued_column(k) for k in FEATURES]
-          
-          regressor = tf.contrib.learn.DNNRegressor(
-            feature_columns=feature_cols, hidden_units=[64, 32, 16], optimizer=tf.train.ProximalAdagradOptimizer(
-                learning_rate=0.1,
-                l1_regularization_strength=0.001) )
-          regressor.fit(input_fn=lambda: input_fn(development), steps=56)
-          
-          y1 = regressor.predict(input_fn=lambda: input_fn(development))
-          y2 = regressor.predict(input_fn=lambda: input_fn(monitoring))
-          development[var_name] = pd.DataFrame(list(itertools.islice(y1, len(development.iloc[:,1])))).values
-          monitoring [var_name] = pd.DataFrame(list(itertools.islice(y2, len(monitoring .iloc[:,1])))).values
-          
-          return development, monitoring
->>>>>>> aa80de003a19a5d598742ae015ef11f4fe456a91
