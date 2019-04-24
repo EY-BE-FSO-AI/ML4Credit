@@ -148,7 +148,7 @@ CV, HI, CV_p_val = PD_tests().Herfindahl(development_set)
 ### Predictive ability (2.9.3)
 ### CCF back-testing using a t-test (2.9.3.1)
 
-CCF_pval = CCF_tests().backtesting(development_set)
+CCF_pval = CCF_tests().backtesting(development_set, 'CCF', 'CCF_realised')
 
 
 ### Discriminatory power (2.9.4) 

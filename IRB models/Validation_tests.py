@@ -212,11 +212,11 @@ class LGD_tests(object):
     
 class CCF_tests(object):
     
-    def backtesting(self, data_set):
+    def backtesting(self, data_set, x, y):
         
         #### Select estimated and realised LGDs for defaulting facilities
-        estimatedCCF = data_set.CCF_predicted
-        realisedCCF = data_set.CCF_realised
+        estimatedCCF = data_set[x]
+        realisedCCF = data_set[y]
         R = len(data_set)
         
         ### Construct test statistic 2.9.3.1
@@ -314,6 +314,3 @@ def gAUC(transition_matrix):
     s = (1 / w_r ** 2) * np.sqrt(s_rhs)
 
     return gAUC, s
-
-
-
