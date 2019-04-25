@@ -82,19 +82,14 @@ class data_model(object):
 
         ### Add actual LGD value
         df.term = df.term.str.replace(" months", "").astype(dtype=np.float64)
-        df["EAD"]                                 = df.installment * df.term - df.total_pymnt  # Original amount - Amount already paid
-        df["CCF_realised"]                        = np.maximum(0, 1 - pd.to_numeric(df['all_util'])/100)
-        df.CCF_realised[df.all_util.isnull()]     = np.maximum(0, df.EAD[df.all_util.isnull()] / (df.installment[df.all_util.isnull()] * df.term[df.all_util.isnull()]))
+        df["EAD"] = df.installment * df.term - df.total_pymnt  # Original amout - Amount already paid
         end_date = datetime.date(2016, 1, 1)
         time_in_default = end_date - df.Default_date
         df["time_in_default"] = time_in_default.apply(lambda d: d.days / 365)
-        df["LGD_realised"]                        = (df.EAD + df.collection_recovery_fee - df.recoveries * (1 + df.int_rate/100) ** (-df.time_in_default)) / (df.EAD + df.collection_recovery_fee)
+        df["LGD_realised"] = (df.EAD + df.collection_recovery_fee - df.recoveries * (
+                                                 1 + df.int_rate/100) ** (-df.time_in_default)) / (
+                                             df.EAD + df.collection_recovery_fee)
         df["LGD_realised"] = np.minimum(1, np.maximum(0, df.LGD_realised) )
-        df.LGD_realised[df.Default_Binary == 0]   = float('NaN')
-        df.CCF_realised[df.Default_Binary == 0]   = float('NaN')
-        df.EAD[df.Default_Binary == 0]            = float('NaN')
-        df.LGD_realised[df.Default_Binary == 1].fillna(0)
-        df.CCF_realised[df.Default_Binary == 1].fillna(0)
 
         # Define development period and monitoring period
         df_dev = df[(df.issue_dt < self.ldate)] # Application before ldate
@@ -102,36 +97,34 @@ class data_model(object):
 
         return df_dev, df_monit
 
-def create_transitionMatrix(data_set, CCF = True):
-    """
-    Create CCF/LGD transition matrix.
-    :param data_set: development/monitoring pandas dataframe.
-    :return: transition matrix.
-    """
-    metric = "CCF" if CCF else "LGD"
-    data_set["%s_predicted" %metric] = np.minimum(100, np.maximum(0, data_set["%s_predicted" %metric].values))
-    data_set["%s_realised" %metric] = np.minimum(100, np.maximum(0, data_set["%s_realised" %metric].values))
-
-    Data_q = pd.DataFrame()
-    Data_q['A'] = data_set['%s_predicted' %metric]
-    Data_q['B'] = data_set['%s_predicted' %metric]
-
-    num_clusters = 7
-    model = KMeans(n_clusters= num_clusters)
-    model.fit(Data_q)
-    Data_q["cluster_num"] = model.labels_
-
-    minmax_data_q = Data_q.groupby('cluster_num').agg({'A' : ['min', 'max']}).sort_values(by= ('A', 'min'))
-    data_q_bins = (minmax_data_q["A"]["max"].shift(1) + minmax_data_q["A"]["min"]) / 2
-    data_q_bins.iloc[0] = 0
-    data_q_bins.loc[num_clusters] = 100
-
-    data_set["%s_realised_grade" %metric] = pd.cut(x = data_set['%s_realised' %metric], bins= data_q_bins, right=False, include_lowest = True)
-    data_set["%s_predicted_grade" %metric] = pd.cut(x = data_set['%s_predicted' %metric], bins= data_q_bins, right=False, include_lowest = True)
-    transition_matrix = data_set.groupby("%s_predicted_grade" %metric).CCF_realised_grade.value_counts().unstack().fillna(0)
-    return transition_matrix, data_set
-
-
+#def create_transitionMatrix(data_set, CCF = True):
+#    """
+#    Create CCF/LGD transition matrix.
+#    :param data_set: development/monitoring pandas dataframe.
+#    :return: transition matrix.
+#    """
+#    metric = "CCF" if CCF else "LGD"
+#    data_set["%s" %metric] = np.minimum(100, np.maximum(0, data_set["%s" %metric].values))
+#    data_set["%s_realised" %metric] = np.minimum(100, np.maximum(0, data_set["%s_realised" %metric].values))
+#
+#    Data_q = pd.DataFrame()
+#    Data_q['A'] = data_set['%s' %metric]
+#    Data_q['B'] = data_set['%s' %metric]
+#
+#    num_clusters = 7
+#    model = KMeans(n_clusters= num_clusters)
+#    model.fit(Data_q)
+#    Data_q["cluster_num"] = model.labels_
+#
+#    minmax_data_q = Data_q.groupby('cluster_num').agg({'A' : ['min', 'max']}).sort_values(by= ('A', 'min'))
+#    data_q_bins = (minmax_data_q["A"]["max"].shift(1) + minmax_data_q["A"]["min"]) / 2
+#    data_q_bins.iloc[0] = 0
+#    data_q_bins.loc[num_clusters] = 100
+#
+#    data_set["%s_realised_grade" %metric] = pd.cut(x = data_set['%s_realised' %metric], bins= data_q_bins, right=False, include_lowest = True)
+#    data_set["%s_grade" %metric] = pd.cut(x = data_set['%s' %metric], bins= data_q_bins, right=False, include_lowest = True)
+#    transition_matrix = data_set.groupby("%s_grade" %metric).CCF_realised_grade.value_counts().unstack().fillna(0)
+#    return transition_matrix, data_set
 
 
 if __name__ == '__main__':

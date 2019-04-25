@@ -71,9 +71,9 @@ development_set, monitoring_set = model().binning_monotonic(development_set, mon
 
 ### Convert Rating grade into numberse###
 monitoring_set.grade_num = monitoring_set.grade.apply(
-    lambda x: {'A': 7, 'B': 6, 'C': 5, 'D': 4, 'E': 3, 'F': 2, 'G': 1}[x])
+    lambda x: {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}[x])
 development_set.grade_num = development_set.grade.apply(
-    lambda x: {'A': 7, 'B': 6, 'C': 5, 'D': 4, 'E': 3, 'F': 2, 'G': 1}[x])
+    lambda x: {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}[x])
 
 ### Test PD model ###
 
@@ -146,8 +146,11 @@ LGD_backtesting_pval = LGD_tests().backtesting(development_set)
 
 ### Discriminatory Power (2.6.3)
 ### gAUC for LGD (2.6.3.1)
-dev_LGD_transition_matrix, development_set = create_transitionMatrix(development_set, CCF=False)
-mon_LGD_transition_matrix, monitoring_set = create_transitionMatrix(monitoring_set, CCF=False)
+dev_LGD_transition_matrix        = development_set[development_set.Default_Binary == 0].groupby(['grade_num', 'Bin_LGD']).size().unstack(fill_value=0)
+dev_LGD_transition_matrix_freq = dev_LGD_transition_matrix / dev_LGD_transition_matrix.sum(axis=0)
+mon_LGD_transition_matrix        = monitoring_set[monitoring_set.Default_Binary == 0].groupby(['grade_num', 'Bin_LGD']).size().unstack(fill_value=0)
+mon_LGD_transition_matrix_freq = mon_LGD_transition_matrix / mon_LGD_transition_matrix.sum(axis=0)
+
 LGD_gAUC_init, LGD_gAUC_curr, LGD_S, LGD_p_val = LGD_tests().gAUC_LGD(mon_LGD_transition_matrix, dev_LGD_transition_matrix)
 
 ### LGD: Qualitative validation tools (2.6.4)

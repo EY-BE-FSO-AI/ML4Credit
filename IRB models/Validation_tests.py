@@ -183,7 +183,7 @@ class LGD_tests(object):
         :return:
         """
         #### Select estimated and realised LGDs for defaulting facilities
-        estimatedLGD = data_set[data_set.Default_Binary == 1].LGD_predicted
+        estimatedLGD = data_set[data_set.Default_Binary == 1].LGD
         realisedLGD = data_set[data_set.Default_Binary == 1].LGD_realised
         N = len(data_set[data_set.Default_Binary == 1])
 
@@ -212,9 +212,9 @@ class LGD_tests(object):
 
     def psi_lgd(self, data_set):
         ### Population stability index
-        grade = data_set.groupby('grade').agg({'LGD_realised': 'mean', 'LGD_predicted': 'mean'})
+        grade = data_set.groupby('grade').agg({'LGD_realised': 'mean', 'LGD': 'mean'})
         PSI = 0
-        for i in range(0, len(grade)):
+        for i in range(1, len(grade)+1):
             PSI += (grade.iloc[i, 1] - grade.iloc[i, 0]) * np.log(grade.iloc[i, 1] / grade.iloc[i, 0])
         return PSI
     
@@ -254,36 +254,36 @@ class CCF_tests(object):
         ### Population stability index
         grade = data_set.groupby('grade').agg({'CCF_realised': 'mean', 'CCF_predicted': 'mean'})
         PSI = 0
-        for i in range(0, len(grade)):
+        for i in range(1, len(grade)+1):
             PSI += (grade.iloc[i, 1] - grade.iloc[i, 0]) * np.log(grade.iloc[i, 1] / grade.iloc[i, 0])
         return PSI
 
 
 def A_lower_ij(trans_matrix, i, j):
     temp = 0
-    for k in range (0, i):
-        for l in range(0,j):
+    for k in range (1, i):
+        for l in range(1,j):
             temp += trans_matrix.loc[k,l]
     return temp
 
 def A_higher_ij(trans_matrix, i, j):
     temp = 0
-    for k in range (i +1, len(trans_matrix)):
-        for l in range(j +1,len(trans_matrix)):
+    for k in range (i +1, len(trans_matrix)+1):
+        for l in range(j +1,len(trans_matrix)+1):
             temp += trans_matrix.loc[k,l]
     return temp
 
 def D_left_ij(trans_matrix, i, j):
     temp = 0
-    for k in range (i+1, len(trans_matrix)):
-        for l in range(0,j):
+    for k in range (i+1, len(trans_matrix)+1):
+        for l in range(1,j):
             temp += trans_matrix.loc[k,l]
     return temp
 
 def D_right_ij(trans_matrix, i, j):
     temp = 0
-    for k in range (0, i):
-        for l in range(j +1,len(trans_matrix)):
+    for k in range (1, i):
+        for l in range(j +1,len(trans_matrix)+1):
             temp += trans_matrix.loc[k,l]
     return temp
 
@@ -298,8 +298,8 @@ def gAUC(transition_matrix):
     d = np.zeros((len(transition_matrix), len(transition_matrix)))
     P = 0
     Q = 0
-    for i in range(0, len(transition_matrix)):
-        for j in range(0, len(transition_matrix)):
+    for i in range(1, len(transition_matrix)+1):
+        for j in range(1, len(transition_matrix)+1):
             if i == j:
                 transition_matrix_A[i, j] = 0
                 transition_matrix_D[i, j] = 0
@@ -323,8 +323,8 @@ def gAUC(transition_matrix):
 
     # gAUC's standard deviation estimation:
     s_rhs = 0
-    for i in range(0, len(transition_matrix)):
-        for j in range(0, len(transition_matrix)):
+    for i in range(1, len(transition_matrix)+1):
+        for j in range(1, len(transition_matrix)+1):
             s_rhs += transition_matrix.loc[i, j] * (w_r * d[i, j] - (P - Q) * (F - r[i])) ** 2
 
     s = (1 / w_r ** 2) * np.sqrt(s_rhs)
