@@ -206,9 +206,17 @@ class LGD_tests(object):
         gAUC_curr, s_curr = gAUC(current_transMatrix)
 
         S = (gAUC_init - gAUC_curr) / s_curr
-        p_val = 1 - t.cdf(S)
+        p_val = 1 - norm.cdf(S)
 
         return gAUC_init, gAUC_curr, S, p_val
+
+    def psi_lgd(self, data_set):
+        ### Population stability index
+        grade = data_set.groupby('grade').agg({'LGD_realised': 'mean', 'LGD_predicted': 'mean'})
+        PSI = 0
+        for i in range(0, len(grade)):
+            PSI += (grade.iloc[i, 1] - grade.iloc[i, 0]) * np.log(grade.iloc[i, 1] / grade.iloc[i, 0])
+        return PSI
     
 class CCF_tests(object):
     
@@ -241,6 +249,14 @@ class CCF_tests(object):
         p_val = 1 - norm.cdf(S)
 
         return gAUC_init, gAUC_curr, S, p_val
+
+    def psi_ccf(self, data_set):
+        ### Population stability index
+        grade = data_set.groupby('grade').agg({'CCF_realised': 'mean', 'CCF_predicted': 'mean'})
+        PSI = 0
+        for i in range(0, len(grade)):
+            PSI += (grade.iloc[i, 1] - grade.iloc[i, 0]) * np.log(grade.iloc[i, 1] / grade.iloc[i, 0])
+        return PSI
 
 
 def A_lower_ij(trans_matrix, i, j):
