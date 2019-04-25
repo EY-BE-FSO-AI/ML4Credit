@@ -16,6 +16,7 @@ from scipy.stats import norm
 import sys
 import os
 import random
+#do we need to import pandas? import pandas as pd
 
 ### Define local directory ###
 local_dr  = os.path.normpath(os.path.expanduser("~/Documents/Python/GitHub/ML4Credit/IRB models"))
@@ -117,8 +118,8 @@ plt.boxplot(AUC_bootstrap)
 
 # Excluding defaulting customers
 transition_matrix        = development_set[development_set.Default_Binary == 0].groupby(['grade_num', 'Bin_PD']).size().unstack(fill_value=0)
-transition_matrix_freq   = transition_matrix / transition_matrix.sum(axis=0)
-n_i                      = transition_matrix.sum(axis=1)
+transition_matrix_freq = transition_matrix / transition_matrix.sum(axis=0)
+n_i = transition_matrix.sum(axis=1)
 
 ### Customer migrations (2.5.5.1)
 # To be developped
@@ -127,29 +128,70 @@ n_i                      = transition_matrix.sum(axis=1)
 upper_MWB, lower_MWB = PD_tests().MWB(transition_matrix, transition_matrix_freq)
 
 ### Stability of migration matrix (2.5.5.2)
-# To be developped
+z_up, z_low, zUP_pval, zDOWN_pval = PD_tests().stability_migration_matrix(transition_matrix, transition_matrix_freq)
 
 ### Concentration in rating grades (2.5.5.3)
 # calculate coefficient of variation and the herfindahl index
 # p-val still needs to be calculated
 CV, HI, CV_p_val = PD_tests().Herfindahl(development_set)
 
-### Loss given default (2.6)
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""""""" "Loss Given Default" """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+### Predictive Ability (2.6.2)
+### LGD back-testing using a t-test (2.6.2.1)
+LGD_backtesting_pval = LGD_tests().backtesting(development_set)
+
+### Discriminatory Power (2.6.3)
+### gAUC for LGD (2.6.3.1)
+dev_LGD_transition_matrix, development_set = create_transitionMatrix(development_set, CCF=False)
+mon_LGD_transition_matrix, monitoring_set = create_transitionMatrix(monitoring_set, CCF=False)
+LGD_gAUC_init, LGD_gAUC_curr, LGD_S, LGD_p_val = LGD_tests().gAUC_LGD(mon_LGD_transition_matrix, dev_LGD_transition_matrix)
+
+### LGD: Qualitative validation tools (2.6.4)
+### Population Stability Index(2.6.4.2)
+LGD_psi = LGD_tests().psi_lgd(data_set=development_set)
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"""""""""""""""""""""""""""""""""""" "Credit Conversion Factor" """"""""""""""""""""""""""""""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+### Credit conversion factor (2.9)
+#CCF model
+development_set["CCF_realised"] = development_set['revol_util'].fillna(100)
+monitoring_set["CCF_realised"] = monitoring_set['revol_util'].fillna(100)
+FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_num',
+            'funded_amnt_scaled', 'int_rate_scaled', 'inq_last_6mths_scaled', 'Income2TB_scaled']
+LABEL = 'CCF_realised'
+development_set, monitoring_set = model().CCF_model(FEATURES, LABEL, development_set, monitoring_set, 'CCF_predicted')
+#development_set.CCF_predicted.hist()
+
+### Predictive ability (2.9.3)
+### CCF back-testing using a t-test (2.9.3.1)
+CCF_backtesting_pval = CCF_tests().backtesting(development_set)
+
+### Discriminatory power (2.9.4)
+### gAUC (2.9.4.1)
+dev_CCF_transition_matrix, development_set = create_transitionMatrix(development_set)
+mon_CCF_transition_matrix, monitoring_set = create_transitionMatrix(monitoring_set)
+CCF_gAUC = CCF_tests().gAUC_CCF(mon_CCF_transition_matrix, dev_CCF_transition_matrix)
+gAUC_data_CCF = development_set[['Bin_CCF', 'Bin_CCF_']]
+### Qualitative validation tools (2.9.5)
+### Population Stability Index (2.9.5.1)
+CCF_psi = CCF_tests().psi_ccf(data_set=development_set)
+
+
+
+### Slotting approach for specialised lending exposures
 # To be developed
-# Priority upon completion of PD
 
 ### Expected loss best estimate (2.7)
 # To be developed
 
 ### LGD in-default (2.8)
 # To be developped
-
-### Credit conversion factor (2.9)
-### Predictive ability (2.9.3)
-### CCF back-testing using a t-test (2.9.3.1)
-
-CCF_pval = CCF_tests().backtesting(development_set, 'CCF', 'CCF_realised')
-
 
 ### Discriminatory power (2.9.4) 
 
@@ -191,5 +233,4 @@ CCF_gAUC = CCF_tests().gAUC_CCF(mon_CCF_transition_matrix, dev_CCF_transition_ma
 
 ### Slotting approach for specialised lending exposures
 # To be developed
-
 
