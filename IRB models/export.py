@@ -30,10 +30,15 @@ class export(object):
 
 import random
 
+PD_sheet_names = {'1.0', '1.1', '1.2', '2.0', '3.0', '4.0', '5.1', '5.2'}
+percent_transition_matrix = 
+
+
 from export import * 
+
 output_example = random.random()
-sheet_name = '5.2' #solution can be improved by providing sheetname dictionary per reporting parameter template
-row = 7 #enables loop
-col = 4 #enables loop
+sheet_name = '5.2'
+row = 7 
+col = 4 
 export().xlsx(export().file_path('LEICode_PD_ModelID_EndOfObservationPeriod_versionNumber.xlsx'), sheet_name, row, col, output_example)
 
