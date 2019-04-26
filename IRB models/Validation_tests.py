@@ -214,7 +214,7 @@ class LGD_tests(object):
         ### Population stability index
         grade = data_set.groupby('grade').agg({'LGD_realised': 'mean', 'LGD': 'mean'})
         PSI = 0
-        for i in range(1, len(grade)+1):
+        for i in range(0, len(grade)):
             PSI += (grade.iloc[i, 1] - grade.iloc[i, 0]) * np.log(grade.iloc[i, 1] / grade.iloc[i, 0])
         return PSI
     
@@ -252,39 +252,39 @@ class CCF_tests(object):
 
     def psi_ccf(self, data_set):
         ### Population stability index
-        grade = data_set.groupby('grade').agg({'CCF_realised': 'mean', 'CCF_predicted': 'mean'})
+        grade = data_set.groupby('grade').agg({'CCF': 'mean', 'CCF_': 'mean'})
         PSI = 0
-        for i in range(1, len(grade)+1):
+        for i in range(0, len(grade)):
             PSI += (grade.iloc[i, 1] - grade.iloc[i, 0]) * np.log(grade.iloc[i, 1] / grade.iloc[i, 0])
         return PSI
 
 
 def A_lower_ij(trans_matrix, i, j):
     temp = 0
-    for k in range (1, i):
-        for l in range(1,j):
-            temp += trans_matrix.loc[k,l]
+    for k in range (0, i):
+        for l in range(0,j):
+            temp += trans_matrix.iloc[k,l]
     return temp
 
 def A_higher_ij(trans_matrix, i, j):
     temp = 0
-    for k in range (i +1, len(trans_matrix)+1):
-        for l in range(j +1,len(trans_matrix)+1):
-            temp += trans_matrix.loc[k,l]
+    for k in range (i, len(trans_matrix)):
+        for l in range(j, len(trans_matrix)):
+            temp += trans_matrix.iloc[k,l]
     return temp
 
 def D_left_ij(trans_matrix, i, j):
     temp = 0
-    for k in range (i+1, len(trans_matrix)+1):
-        for l in range(1,j):
-            temp += trans_matrix.loc[k,l]
+    for k in range (i, len(trans_matrix)):
+        for l in range(0,j):
+            temp += trans_matrix.iloc[k,l]
     return temp
 
 def D_right_ij(trans_matrix, i, j):
     temp = 0
-    for k in range (1, i):
-        for l in range(j +1,len(trans_matrix)+1):
-            temp += trans_matrix.loc[k,l]
+    for k in range (0, i):
+        for l in range(j, len(trans_matrix)):
+            temp += trans_matrix.iloc[k,l]
     return temp
 
 def gAUC(transition_matrix):
@@ -298,23 +298,23 @@ def gAUC(transition_matrix):
     d = np.zeros((len(transition_matrix), len(transition_matrix)))
     P = 0
     Q = 0
-    for i in range(1, len(transition_matrix)+1):
-        for j in range(1, len(transition_matrix)+1):
+    for i in range(0, len(transition_matrix)):
+        for j in range(0, len(transition_matrix)):
             if i == j:
                 transition_matrix_A[i, j] = 0
                 transition_matrix_D[i, j] = 0
-                P += transition_matrix.loc[i, j] * transition_matrix_A[i, j]
-                Q += transition_matrix.loc[i, j] * transition_matrix_D[i, j]
+                P += transition_matrix.iloc[i, j] * transition_matrix_A[i, j]
+                Q += transition_matrix.iloc[i, j] * transition_matrix_D[i, j]
                 d[i, j] = transition_matrix_A[i, j] - transition_matrix_D[i, j]
             else:
                 transition_matrix_A[i, j] = A_lower_ij(transition_matrix, i, j) + A_higher_ij(
                     transition_matrix, i, j)
                 transition_matrix_D[i, j] = D_left_ij(transition_matrix, i, j) + D_right_ij(
                     transition_matrix, i, j)
-                P += transition_matrix.loc[i, j] * transition_matrix_A[i, j]
-                Q += transition_matrix.loc[i, j] * transition_matrix_D[i, j]
+                P += transition_matrix.iloc[i, j] * transition_matrix_A[i, j]
+                Q += transition_matrix.iloc[i, j] * transition_matrix_D[i, j]
                 d[i, j] = transition_matrix_A[i, j] - transition_matrix_D[i, j]
-
+                
     r = transition_matrix.sum(axis=0).values
     F = transition_matrix.values.sum() ** 2
     w_r = F - (np.sum(r ** 2))
@@ -323,9 +323,9 @@ def gAUC(transition_matrix):
 
     # gAUC's standard deviation estimation:
     s_rhs = 0
-    for i in range(1, len(transition_matrix)+1):
-        for j in range(1, len(transition_matrix)+1):
-            s_rhs += transition_matrix.loc[i, j] * (w_r * d[i, j] - (P - Q) * (F - r[i])) ** 2
+    for i in range(0, len(transition_matrix)):
+        for j in range(0, len(transition_matrix)):
+            s_rhs += transition_matrix.iloc[i, j] * (w_r * d[i, j] - (P - Q) * (F - r[i])) ** 2
 
     s = (1 / w_r ** 2) * np.sqrt(s_rhs)
 

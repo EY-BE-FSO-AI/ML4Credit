@@ -1,3 +1,8 @@
+###Owner code: Brent Oeyen
+###Comments: 
+###          improve speed: look at join on intervals
+########################################################################################################################
+
 import pandas            as pd
 import numpy             as np
 import itertools
