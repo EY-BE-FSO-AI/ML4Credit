@@ -214,7 +214,7 @@ class LGD_tests(object):
         ### Population stability index
         grade = data_set.groupby('grade').agg({'LGD_realised': 'mean', 'LGD': 'mean'})
         PSI = 0
-        for i in range(1, len(grade)+1):
+        for i in range(0, len(grade)):
             PSI += (grade.iloc[i, 1] - grade.iloc[i, 0]) * np.log(grade.iloc[i, 1] / grade.iloc[i, 0])
         return PSI
     
@@ -252,9 +252,9 @@ class CCF_tests(object):
 
     def psi_ccf(self, data_set):
         ### Population stability index
-        grade = data_set.groupby('grade').agg({'CCF_realised': 'mean', 'CCF': 'mean'})
+        grade = data_set.groupby('grade').agg({'CCF': 'mean', 'CCF_': 'mean'})
         PSI = 0
-        for i in range(1, len(grade)+1):
+        for i in range(0, len(grade)):
             PSI += (grade.iloc[i, 1] - grade.iloc[i, 0]) * np.log(grade.iloc[i, 1] / grade.iloc[i, 0])
         return PSI
 
