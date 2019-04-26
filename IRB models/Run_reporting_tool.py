@@ -204,12 +204,13 @@ nb_default_pergrade = jeffrey_test[('Default_Binary', 'sum')].values[:-1]
 development_set["original_exposure"] = (development_set.installment * development_set.term).astype(float)
 original_exposure_pergrade = development_set.groupby("grade").original_exposure.sum().values
 jeffrey_test_pval_pergrade = jeffrey_test.p_val.values[:-1]
+s_init = 0
 
 # Store eveything in dictionary
 PD_excel_input = {
     "predictive_ability" : [name_rating_grades, averagePD_pergrade, nb_customer_pergrade, nb_default_pergrade,
                             jeffrey_test_pval_pergrade, original_exposure_pergrade],
-    "AUC" : [AUC_development, AUC_validation_year, s_curr, AUC_S, AUC_p, "no", start_date, end_date, nb_customer, s_init],
+    "AUC" : [AUC_development, AUC_validation_year, s_curr, AUC_S, AUC_p, "yes", start_date, end_date, nb_customer, s_init],
     "customer_migrations" : [upper_MWB, lower_MWB],
     "concentration_rating_grades" : [HI_init, HI_curr, cr_pval, 0, start_date, end_date, nb_customer,
                                      nb_rating_grades],
