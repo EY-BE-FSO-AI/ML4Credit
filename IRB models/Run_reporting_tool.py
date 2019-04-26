@@ -1,4 +1,3 @@
-#########################################################################################################################
 ###Owner code: Brent Oeyen
 ###Comments: 
 ###          -Look into the possibility of loading in py scripts without having to declare import statements twice
@@ -40,9 +39,9 @@ FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_n
             'funded_amnt_scaled', 'int_rate_scaled', 'inq_last_6mths_scaled', 'Income2TB_scaled']
 LABEL = 'Default_Binary'
 development_set, monitoring_set = model().PD_model(FEATURES, LABEL, development_set, monitoring_set, 'PD')
+#########################################################################################################################
 
-### #development_set.LGD_realised.hist()
-development_set.LGD_realised.hist()
+#LGD model
 FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_num',
             'funded_amnt_scaled', 'int_rate_scaled', 'inq_last_6mths_scaled', 'Income2TB_scaled']
 LABEL = 'LGD_realised'
@@ -117,9 +116,8 @@ plt.boxplot(AUC_bootstrap)
 ### Stability (2.5.5)
 
 # Excluding defaulting customers
-transition_matrix        = development_set[development_set.Default_Binary == 0].groupby(['grade_num', 'Bin_PD']).size().unstack(fill_value=0)
-transition_matrix_freq = transition_matrix / transition_matrix.sum(axis=0)
-n_i = transition_matrix.sum(axis=1)
+transition_matrix       = development_set[development_set.Default_Binary == 0].groupby(['grade_num', 'Bin_PD']).size().unstack(fill_value=0)
+transition_matrix_freq  = transition_matrix / transition_matrix.sum(axis=0)
 
 ### Customer migrations (2.5.5.1)
 # To be developped
@@ -155,21 +153,15 @@ LGD_gAUC_init, LGD_gAUC_curr, LGD_S, LGD_p_val = LGD_tests().gAUC_LGD(mon_LGD_tr
 
 ### LGD: Qualitative validation tools (2.6.4)
 ### Population Stability Index(2.6.4.2)
+data_set.LGD_realised = data_set.LGD_realised.astype(float) #LGD_realised was stored as object
 LGD_psi = LGD_tests().psi_lgd(data_set=development_set)
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """""""""""""""""""""""""""""""""""" "Credit Conversion Factor" """"""""""""""""""""""""""""""""""""""""""""""""""""""""
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
 ### Credit conversion factor (2.9)
-#CCF model
-development_set["CCF_realised"] = development_set['revol_util'].fillna(100)
-monitoring_set["CCF_realised"] = monitoring_set['revol_util'].fillna(100)
-FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_num',
-            'funded_amnt_scaled', 'int_rate_scaled', 'inq_last_6mths_scaled', 'Income2TB_scaled']
-LABEL = 'CCF_realised'
-development_set, monitoring_set = model().CCF_model(FEATURES, LABEL, development_set, monitoring_set, 'CCF_predicted')
-#development_set.CCF_predicted.hist()
 
 ### Predictive ability (2.9.3)
 ### CCF back-testing using a t-test (2.9.3.1)

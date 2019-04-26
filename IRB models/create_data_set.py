@@ -81,15 +81,20 @@ class data_model(object):
         ScaleNUM(df, 'Income2TB')
 
         ### Add actual LGD value
-        df.term = df.term.str.replace(" months", "").astype(dtype=np.float64)
-        df["EAD"] = df.installment * df.term - df.total_pymnt  # Original amout - Amount already paid
-        end_date = datetime.date(2016, 1, 1)
-        time_in_default = end_date - df.Default_date
-        df["time_in_default"] = time_in_default.apply(lambda d: d.days / 365)
-        df["LGD_realised"] = (df.EAD + df.collection_recovery_fee - df.recoveries * (
-                                                 1 + df.int_rate/100) ** (-df.time_in_default)) / (
-                                             df.EAD + df.collection_recovery_fee)
-        df["LGD_realised"] = np.minimum(1, np.maximum(0, df.LGD_realised) )
+        df.term                                   = df.term.str.replace(" months", "").astype(dtype=np.float64)
+        df["EAD"]                                 = df.installment * df.term - df.total_pymnt  # Original amount - Amount already paid
+        df["CCF_realised"]                        = np.maximum(0, 1 - pd.to_numeric(df['all_util'])/100)
+        df.CCF_realised[df.all_util.isnull()]     = np.maximum(0, df.EAD[df.all_util.isnull()] / (df.installment[df.all_util.isnull()] * df.term[df.all_util.isnull()]))
+        end_date                                  = datetime.date(2016, 1, 1)
+        time_in_default                           = end_date - df.Default_date
+        df["time_in_default"]                     = time_in_default.apply(lambda d: d.days / 365)
+        df["LGD_realised"]                        = (df.EAD + df.collection_recovery_fee - df.recoveries * (1 + df.int_rate/100) ** (-df.time_in_default)) / (df.EAD + df.collection_recovery_fee)
+        df["LGD_realised"]                        = np.minimum(1, np.maximum(0, df.LGD_realised))
+        df.LGD_realised[df.Default_Binary == 0]   = float('NaN')
+        df.CCF_realised[df.Default_Binary == 0]   = float('NaN')
+        df.EAD[df.Default_Binary == 0]            = float('NaN')
+        df.LGD_realised[df.Default_Binary == 1].fillna(0)
+        df.CCF_realised[df.Default_Binary == 1].fillna(0)
 
         # Define development period and monitoring period
         df_dev = df[(df.issue_dt < self.ldate)] # Application before ldate
