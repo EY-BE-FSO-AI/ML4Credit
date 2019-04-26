@@ -96,10 +96,10 @@ jeffrey_test = PD_tests().Jeffrey(development_set)
 ### Current AUC vs AUC at initial validation/development (2.5.4.1)
 
 validation_year = datetime.date(2016, 1, 1)
-AUC_validation_year, s = PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.issue_dt > validation_year) | (monitoring_set.Default_date > validation_year)],
+AUC_validation_year, s_curr = PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.issue_dt > validation_year) | (monitoring_set.Default_date > validation_year)],
                                         monitoring_set.grade_num[(monitoring_set.issue_dt > validation_year) | (monitoring_set.Default_date > validation_year)], 1)
-AUC_development = PD_tests().AUC(development_set.Default_Binary, development_set.grade_num, 0)[0]
-AUC_S = (AUC_development - AUC_validation_year) / s
+AUC_development, s_init = PD_tests().AUC(development_set.Default_Binary, development_set.grade_num, 0)
+AUC_S = (AUC_development - AUC_validation_year) / s_curr
 AUC_p = norm.pdf(AUC_S)
 AUC_dev_years = []
 for x in range(2007, 2014):
@@ -130,8 +130,10 @@ z_up, z_low, zUP_pval, zDOWN_pval = PD_tests().stability_migration_matrix(transi
 
 ### Concentration in rating grades (2.5.5.3)
 # calculate coefficient of variation and the herfindahl index
-# p-val still needs to be calculated
-CV, HI, CV_p_val = PD_tests().Herfindahl(development_set)
+K = len(development_set[development_set.Default_Binary == 0].grade.unique()) #number of rating grades for non-defaulted exposures
+CV_init, HI_init, _ = PD_tests().Herfindahl(development_set)
+CV_curr, HI_curr, _ = PD_tests().Herfindahl(monitoring_set)
+cr_pval = 1 - norm.cdf(np.sqrt(K - 1) * (CV_curr - CV_init) / np.sqrt(CV_curr**2 * (0.5 + CV_curr**2)))
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -186,4 +188,34 @@ CCF_psi = CCF_tests().psi_ccf(data_set=development_set)
 ### Slotting approach for specialised lending exposures (2.10)
 # To be developed
 
+### Export to Excel
+from export import *
+
+# Define some missing values (Ideally should be given in the testing results)
+start_date = datetime.date(2007,1,1)
+end_date = datetime.date(2015, 1, 1)
+nb_customer = len(development_set.id.unique())
+nb_rating_grades = len(development_set.grade.unique())
+name_rating_grades = jeffrey_test.index.tolist()[:-1]
+development_set.PD = development_set.PD.astype(float) #changing dtype of PD column to use groupby
+averagePD_pergrade = development_set.groupby("grade").PD.mean().values
+nb_customer_pergrade = development_set.grade.value_counts().sort_index().values
+nb_default_pergrade = jeffrey_test[('Default_Binary', 'sum')].values[:-1]
+development_set["original_exposure"] = (development_set.installment * development_set.term).astype(float)
+original_exposure_pergrade = development_set.groupby("grade").original_exposure.sum().values
+jeffrey_test_pval_pergrade = jeffrey_test.p_val.values[:-1]
+
+# Store eveything in dictionary
+PD_excel_input = {
+    "predictive_ability" : [name_rating_grades, averagePD_pergrade, nb_customer_pergrade, nb_default_pergrade,
+                            jeffrey_test_pval_pergrade, original_exposure_pergrade],
+    "AUC" : [AUC_development, AUC_validation_year, s_curr, AUC_S, AUC_p, "no", start_date, end_date, nb_customer, s_init],
+    "customer_migrations" : [upper_MWB, lower_MWB],
+    "concentration_rating_grades" : [HI_init, HI_curr, cr_pval, 0, start_date, end_date, nb_customer,
+                                     nb_rating_grades],
+    "stability_migration_matrix" : [z_up, z_low, zUP_pval, zDOWN_pval],
+}
+
+
+export().PD_toExcel( PD_excel_input )
 
