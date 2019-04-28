@@ -1,6 +1,6 @@
 ###Owner code: Brent Oeyen
 ###Comments: 
-###          improve speed: look at join on intervals
+###          improve speed: look at join on intervals currently implemented using numpy
 ########################################################################################################################
 
 import pandas            as pd
