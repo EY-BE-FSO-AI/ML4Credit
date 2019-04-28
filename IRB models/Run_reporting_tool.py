@@ -97,8 +97,8 @@ AUC_S = (AUC_development - AUC_validation_year) / s_curr
 AUC_p = norm.pdf(AUC_S)
 AUC_dev_years = []
 for x in range(2007, 2014):
-    AUC_dev_years.append(PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.issue_dt.astype("datetime64[ns]").dt.year == x) | (monitoring_set.Default_date.astype("datetime64[ns]").dt.year == x)],
-                                        monitoring_set.grade_num[(monitoring_set.issue_dt.astype("datetime64[ns]").dt.year == x) | (monitoring_set.Default_date.astype("datetime64[ns]").dt.year == x)], 0)[0])
+    AUC_dev_years.append(PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.obs_dt.astype("datetime64[ns]").dt.year == x) | (monitoring_set.Default_date.astype("datetime64[ns]").dt.year == x)],
+                                        monitoring_set.grade_num[(monitoring_set.obs_dt.astype("datetime64[ns]").dt.year == x) | (monitoring_set.Default_date.astype("datetime64[ns]").dt.year == x)], 0)[0])
 AUC_bootstrap = []
 random.seed = 1
 for x in range(10000):
