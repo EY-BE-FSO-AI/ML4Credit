@@ -35,7 +35,7 @@ class data_model(object):
         df['Default_Binary'] = df.loan_status.apply(lambda s : 1 if s in dflt_definition else 0)
         
         ### Convert Rating grade into numberse###
-        df[grade_num] = df.grade.apply(lambda x: {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}[x])
+        df['grade_num'] = df.grade.apply(lambda x: {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}[x])
 
 #         ### LGD variable ###
 #         df['months'] = [int(x[1:3]) for x in df.term]
