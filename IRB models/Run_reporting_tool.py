@@ -90,8 +90,8 @@ jeffrey_test = PD_tests().Jeffrey(development_set)
 ### Current AUC vs AUC at initial validation/development (2.5.4.1)
 
 validation_year = datetime.date(2016, 1, 1)
-AUC_validation_year, s_curr = PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.issue_dt > validation_year) | (monitoring_set.Default_date > validation_year)],
-                                        monitoring_set.grade_num[(monitoring_set.issue_dt > validation_year) | (monitoring_set.Default_date > validation_year)], 1)
+AUC_validation_year, s_curr = PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.obs_dt > validation_year) | (monitoring_set.Default_date > validation_year)],
+                                        monitoring_set.grade_num[(monitoring_set.obs_dt > validation_year) | (monitoring_set.Default_date > validation_year)], 1)
 AUC_development, s_init = PD_tests().AUC(development_set.Default_Binary, development_set.grade_num, 0)
 AUC_S = (AUC_development - AUC_validation_year) / s_curr
 AUC_p = norm.pdf(AUC_S)
