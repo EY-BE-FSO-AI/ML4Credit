@@ -68,12 +68,6 @@ development_set, monitoring_set = model().binning_monotonic(development_set, mon
 ### LGD Test
 ### To be continued...
 
-### Convert Rating grade into numberse###
-monitoring_set.grade_num = monitoring_set.grade.apply(
-    lambda x: {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}[x])
-development_set.grade_num = development_set.grade.apply(
-    lambda x: {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}[x])
-
 ### Test PD model ###
 
 from Validation_tests import *
