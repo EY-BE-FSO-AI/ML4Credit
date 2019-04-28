@@ -59,7 +59,7 @@ class data_model(object):
                
         df = catVAR2num(df, 'purpose', 'Default_Binary')
         df = catVAR2num(df, 'home_ownership', 'Default_Binary')
-        df = catVAR2num(df, 'grade', 'Default_Binary')
+        #df = catVAR2num(df, 'grade', 'Default_Binary')
         df = catVAR2num(df, 'sub_grade', 'Default_Binary')
         df = catVAR2num(df, 'addr_state', 'Default_Binary')
         df = catVAR2num(df, 'emp_length', 'Default_Binary')
