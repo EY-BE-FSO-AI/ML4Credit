@@ -68,12 +68,6 @@ development_set, monitoring_set = model().binning_monotonic(development_set, mon
 ### LGD Test
 ### To be continued...
 
-### Convert Rating grade into numberse###
-monitoring_set.grade_num = monitoring_set.grade.apply(
-    lambda x: {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}[x])
-development_set.grade_num = development_set.grade.apply(
-    lambda x: {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}[x])
-
 ### Test PD model ###
 
 from Validation_tests import *
@@ -96,15 +90,15 @@ jeffrey_test = PD_tests().Jeffrey(development_set)
 ### Current AUC vs AUC at initial validation/development (2.5.4.1)
 
 validation_year = datetime.date(2016, 1, 1)
-AUC_validation_year, s_curr = PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.issue_dt > validation_year) | (monitoring_set.Default_date > validation_year)],
-                                        monitoring_set.grade_num[(monitoring_set.issue_dt > validation_year) | (monitoring_set.Default_date > validation_year)], 1)
+AUC_validation_year, s_curr = PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.obs_dt > validation_year) | (monitoring_set.Default_date > validation_year)],
+                                        monitoring_set.grade_num[(monitoring_set.obs_dt > validation_year) | (monitoring_set.Default_date > validation_year)], 1)
 AUC_development, s_init = PD_tests().AUC(development_set.Default_Binary, development_set.grade_num, 0)
 AUC_S = (AUC_development - AUC_validation_year) / s_curr
 AUC_p = norm.pdf(AUC_S)
 AUC_dev_years = []
 for x in range(2007, 2014):
-    AUC_dev_years.append(PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.issue_dt.astype("datetime64[ns]").dt.year == x) | (monitoring_set.Default_date.astype("datetime64[ns]").dt.year == x)],
-                                        monitoring_set.grade_num[(monitoring_set.issue_dt.astype("datetime64[ns]").dt.year == x) | (monitoring_set.Default_date.astype("datetime64[ns]").dt.year == x)], 0)[0])
+    AUC_dev_years.append(PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.obs_dt.astype("datetime64[ns]").dt.year == x) | (monitoring_set.Default_date.astype("datetime64[ns]").dt.year == x)],
+                                        monitoring_set.grade_num[(monitoring_set.obs_dt.astype("datetime64[ns]").dt.year == x) | (monitoring_set.Default_date.astype("datetime64[ns]").dt.year == x)], 0)[0])
 AUC_bootstrap = []
 random.seed = 1
 for x in range(10000):

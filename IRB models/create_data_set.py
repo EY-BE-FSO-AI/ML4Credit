@@ -23,7 +23,7 @@ class data_model(object):
         """
         df = self.data.copy()
         # Convert dates to datetime
-        df['issue_dt'] = df.issue_d.apply(lambda d: datetime.datetime.strptime(d, "%b-%Y").date())
+        df['obs_dt'] = df.issue_d.apply(lambda d: datetime.datetime.strptime(d, "%b-%Y").date())
 
         #Removing missing default date (use next_payment_date and last_payment_date to infer default_date)
         df["Default_date"] = df.last_pymnt_d.fillna(df.next_pymnt_d)
@@ -33,6 +33,9 @@ class data_model(object):
         #Default definition (given in the data model)
         dflt_definition = ['Default', 'Charged Off', 'Late (31-120 days)', 'Late (16-30 days)', 'Does not meet the credit policy. Status:Charged Off']
         df['Default_Binary'] = df.loan_status.apply(lambda s : 1 if s in dflt_definition else 0)
+        
+        ### Convert Rating grade into numberse###
+        df['grade_num'] = df.grade.apply(lambda x: {'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7}[x])
 
 #         ### LGD variable ###
 #         df['months'] = [int(x[1:3]) for x in df.term]
@@ -56,7 +59,7 @@ class data_model(object):
                
         df = catVAR2num(df, 'purpose', 'Default_Binary')
         df = catVAR2num(df, 'home_ownership', 'Default_Binary')
-        df = catVAR2num(df, 'grade', 'Default_Binary')
+        #df = catVAR2num(df, 'grade', 'Default_Binary')
         df = catVAR2num(df, 'sub_grade', 'Default_Binary')
         df = catVAR2num(df, 'addr_state', 'Default_Binary')
         df = catVAR2num(df, 'emp_length', 'Default_Binary')
@@ -82,25 +85,26 @@ class data_model(object):
 
         ### Add actual LGD value
         df.term = df.term.str.replace(" months", "").astype(dtype=np.float64)
-        df["EAD"] = df.installment * df.term - df.total_pymnt  # Original amout - Amount already paid
+        df["EAD_realised"] = df.installment * df.term - df.total_pymnt  # Original amout - Amount already paid
         df["CCF_realised"]                        = np.maximum(0, 1 - pd.to_numeric(df['all_util'])/100)
-        df.CCF_realised[df.all_util.isnull()]     = np.maximum(0, df.EAD[df.all_util.isnull()] / (df.installment[df.all_util.isnull()] * df.term[df.all_util.isnull()]))
+        df.CCF_realised[df.all_util.isnull()]     = np.maximum(0, df.EAD_realised[df.all_util.isnull()] / (df.installment[df.all_util.isnull()] * df.term[df.all_util.isnull()]))
         end_date = datetime.date(2016, 1, 1)
         time_in_default = end_date - df.Default_date
         df["time_in_default"] = time_in_default.apply(lambda d: d.days / 365)
-        df["LGD_realised"] = (df.EAD + df.collection_recovery_fee - df.recoveries * (
-                                                 1 + df.int_rate/100) ** (-df.time_in_default)) / (
-                                             df.EAD + df.collection_recovery_fee)
+        df["LGD_realised"] = (df.EAD_realised + df.collection_recovery_fee - df.recoveries * (
+                              1 + df.int_rate/100) ** (-df.time_in_default)) / (
+                              df.EAD_realised + df.collection_recovery_fee)
         df["LGD_realised"] = np.minimum(1, np.maximum(0, df.LGD_realised) )
         df.LGD_realised[df.Default_Binary == 0]   = float('NaN')
         df.CCF_realised[df.Default_Binary == 0]   = float('NaN')
-        df.EAD[df.Default_Binary == 0]            = float('NaN')
+        df.EAD_realised[df.Default_Binary == 0]   = float('NaN')
         df.LGD_realised[df.Default_Binary == 1].fillna(0)
         df.CCF_realised[df.Default_Binary == 1].fillna(0)
+        df.EAD_realised[df.Default_Binary == 1].fillna(0)
 
         # Define development period and monitoring period
-        df_dev = df[(df.issue_dt < self.ldate)] # Application before ldate
-        df_monit = df[(df.issue_dt > self.ldate) | (df.Default_date > self.ldate)] #Application after ldate OR default after ldate
+        df_dev = df[(df.obs_dt < self.ldate)] # Application before ldate
+        df_monit = df[(df.obs_dt > self.ldate) | (df.Default_date > self.ldate)] #Application after ldate OR default after ldate
 
         return df_dev, df_monit
 
@@ -138,5 +142,5 @@ if __name__ == '__main__':
     df = pd.read_csv(os.path.normpath(os.path.expanduser("~/Documents/Python")) + "/loan.csv", low_memory=False)
     development_set, monitoring_set = data_model(data = df, ldate= datetime.date(2015, 1, 1)).split_data()
     #Plot application years for dev set:
-    development_set.issue_dt.apply(lambda d: d.year).value_counts().plot.bar()
+    development_set.obs.apply(lambda d: d.year).value_counts().plot.bar()
     plt.show()
