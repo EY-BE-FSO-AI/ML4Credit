@@ -50,14 +50,14 @@ class PD_tests(object):
          #alpha = D + 1/2
          #beta = Nc- D + 1/2
          
-         df_Jeffrey = name_set[['grade', 'PD', 'Default_Binary']]
-         aggregation = df_Jeffrey.groupby('grade').agg({'grade':'count', 'PD': ['sum','count'], 'Default_Binary': ['sum', 'count']})
+         df_Jeffrey                = name_set[['grade', 'PD', 'Default_Binary']]
+         aggregation               = df_Jeffrey.groupby('grade').agg({'grade':'count', 'PD': ['sum','count'], 'Default_Binary': ['sum', 'count']})
          aggregation.loc[len(aggregation) + 1] = aggregation.sum()
-         aggregation['actual_DF'] = aggregation[('Default_Binary', 'sum')] / aggregation[('Default_Binary', 'count')]
-         aggregation['alpha'] = aggregation[('Default_Binary', 'sum')] + 1/2
-         aggregation['beta'] = aggregation[('Default_Binary', 'count')] - aggregation[('Default_Binary', 'sum')] + 1/2
-         aggregation['H0PD'] = aggregation[('PD', 'sum')]/aggregation[('PD', 'count')]
-         aggregation['p_val'] = beta.cdf(aggregation['H0PD'], aggregation['alpha'], aggregation['beta'])
+         aggregation['actual_DF']  = aggregation[('Default_Binary', 'sum')] / aggregation[('Default_Binary', 'count')]
+         aggregation['alpha']      = aggregation[('Default_Binary', 'sum')] + 1/2
+         aggregation['beta']       = aggregation[('Default_Binary', 'count')] - aggregation[('Default_Binary', 'sum')] + 1/2
+         aggregation['H0PD']       = aggregation[('PD', 'mean')]
+         aggregation['p_val']      = beta.cdf(aggregation['H0PD'], aggregation['alpha'], aggregation['beta'])
          aggregation.rename(index={len(aggregation):'Portfolio'})
          return aggregation
     
