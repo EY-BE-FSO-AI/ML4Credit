@@ -66,7 +66,7 @@ class export(object):
         :param stat_array: array to write to excel;
         :param row_pos: initial row positions;
         :param col_pos: column position;
-        :param row_wise:
+        :param row_wise: True/False.
         :return:
         """
         i = 0
@@ -114,7 +114,8 @@ class export(object):
 
         # Stability - Customer Migration
         # Current AUC vs AUC at initial validation/development (§ 2.5.4.1) - sheet 4.0
-        self.array_toExcel(wb=wbk40, stat_array=pd_inputs["concentration_rating_grades"], row_pos=18, col_pos=4, row_wise=False)
+        self.array_toExcel(wb=wbk40, stat_array=pd_inputs["concentration_rating_grades"], row_pos=18, col_pos=4,
+                           row_wise=False)
         # Customer Migrations (§ 2.5.5.1) - sheet 5.1
         wbk51 = oxl.get_sheet_by_name("5.1")
         self.array_toExcel(wb=wbk51, stat_array=pd_inputs["customer_migrations"], row_pos=7, col_pos=4,row_wise=False)
@@ -122,6 +123,15 @@ class export(object):
         # Stability - Stability of Migrations
         # Customer Migrations (§ 2.5.5.2) - sheet 5.2
         wbk52 = oxl.get_sheet_by_name("5.2")
+        transMatrix = pd_inputs["stability_migration_matrix"][0]
+        z_ij = pd_inputs["stability_migration_matrix"][1] + pd_inputs["stability_migration_matrix"][2]
+        phi_zij = pd_inputs["stability_migration_matrix"][3] + pd_inputs["stability_migration_matrix"][4]
+        c = 0
+        for j in range(len(transMatrix.columns)):
+            self.array_toExcel(wb=wbk52, stat_array= transMatrix.iloc[:, j], row_pos=7, col_pos=(4 + c))
+            self.array_toExcel(wb=wbk52, stat_array= z_ij[:, j], row_pos=7, col_pos=(5 + c))
+            self.array_toExcel(wb=wbk52, stat_array= phi_zij[:, j], row_pos=7, col_pos=(6 + c))
+            c += 3
 
         # Save file
         oxl.save( file_name )

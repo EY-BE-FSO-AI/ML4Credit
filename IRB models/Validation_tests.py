@@ -152,7 +152,7 @@ class PD_tests(object):
          K = len(p)
 
          z_up = np.zeros(p.shape)
-         for i in range(1, K - 1):
+         for i in range(0, K - 1):
              for j in range(i + 1, K):
                  up = p[i, j - 1] - p[i, j]
                  down = np.sqrt(
@@ -166,8 +166,8 @@ class PD_tests(object):
                  down = np.sqrt(
                  (p[i, j] * (1 - p[i, j]) + p[i, j + 1] * (1 - p[i, j + 1]) + 2 * p[i, j] * p[i, j + 1]) / N[i])
                  z_low[i, j] = up / down
-         zUP_pval= norm.sf(abs(z_up)) # one-sided
-         zDOWN_pval = norm.sf(abs(z_low)) # one-sided
+         zUP_pval= norm.cdf(z_up) # one-sided
+         zDOWN_pval = norm.cdf(z_low) # one-sided
 
          return z_up, z_low, zUP_pval, zDOWN_pval
 
