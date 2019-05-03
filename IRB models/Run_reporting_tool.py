@@ -58,12 +58,14 @@ LABEL = 'CCF_realised'
 development_set, monitoring_set = model().CCF_model(FEATURES, LABEL, development_set, monitoring_set, 'CCF_')
 
 ###Bin PDs
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'PD', 'Default_Binary', 75)
+development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'PD', 'Default_Binary', 75, False)
 ###Bin CCF
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF',  'CCF_realised', 75)
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF_', 'CCF_realised', 75)
+development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF',  'CCF_realised', 75, False)
+development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF_realised',  'CCF_realised', 75, True)
+development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF_', 'CCF_realised', 65, False)
 ### Bin LGD
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'LGD', 'LGD_realised', 75)
+development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'LGD', 'LGD_realised', 75, False)
+development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'LGD_realised', 'LGD_realised', 23, True)
 
 ### LGD Test
 ### To be continued...
@@ -110,8 +112,8 @@ plt.boxplot(AUC_bootstrap)
 ### Stability (2.5.5)
 
 # Excluding defaulting customers
-transition_matrix       = development_set[development_set.Default_Binary == 0].groupby(['grade_num', 'Bin_PD']).size().unstack(fill_value=0)
-transition_matrix_freq  = transition_matrix / transition_matrix.sum(axis=0)
+transition_matrix        = matrix_obs(development_set, 'grade_num', 'Bin_PD', 'Default_Binary')
+transition_matrix_freq   = matrix_(transition_matrix)
 
 ### Customer migrations (2.5.5.1)
 # To be developped
@@ -140,10 +142,10 @@ LGD_backtesting_pval = LGD_tests().backtesting(development_set)
 
 ### Discriminatory Power (2.6.3)
 ### gAUC for LGD (2.6.3.1)
-dev_LGD_transition_matrix        = development_set[development_set.Default_Binary == 0].groupby(['grade_num', 'Bin_LGD']).size().unstack(fill_value=0)
-dev_LGD_transition_matrix_freq = dev_LGD_transition_matrix / dev_LGD_transition_matrix.sum(axis=0)
-mon_LGD_transition_matrix        = monitoring_set[monitoring_set.Default_Binary == 0].groupby(['grade_num', 'Bin_LGD']).size().unstack(fill_value=0)
-mon_LGD_transition_matrix_freq = mon_LGD_transition_matrix / mon_LGD_transition_matrix.sum(axis=0)
+dev_LGD_transition_matrix        = matrix_obs(development_set, 'Bin_LGD', 'Bin_LGD_realised', 'Default_Binary')
+dev_LGD_transition_matrix_freq   = matrix_prob(dev_LGD_transition_matrix)
+mon_LGD_transition_matrix        = matrix_obs(monitoring_set, 'Bin_LGD', 'Bin_LGD_realised', 'Default_Binary')
+mon_LGD_transition_matrix_freq   = matrix_prob(mon_LGD_transition_matrix)
 
 LGD_gAUC_init, LGD_gAUC_curr, LGD_S, LGD_p_val = LGD_tests().gAUC_LGD(mon_LGD_transition_matrix, dev_LGD_transition_matrix)
 
@@ -166,10 +168,10 @@ CCF_backtesting_pval = CCF_tests().backtesting(development_set, 'CCF', 'CCF_')
 
 ### Discriminatory power (2.9.4)
 ### gAUC (2.9.4.1)
-dev_CCF_transition_matrix        = development_set[development_set.Default_Binary == 0].groupby(['grade_num', 'Bin_CCF']).size().unstack(fill_value=0)
-dev_CCF_transition_matrix_freq = dev_CCF_transition_matrix / dev_CCF_transition_matrix.sum(axis=0)
-mon_CCF_transition_matrix        = monitoring_set[monitoring_set.Default_Binary == 0].groupby(['grade_num', 'Bin_CCF']).size().unstack(fill_value=0)
-mon_CCF_transition_matrix_freq = mon_CCF_transition_matrix / mon_CCF_transition_matrix.sum(axis=0)
+dev_CCF_transition_matrix        = matrix_obs(development_set, 'Bin_CCF', 'Bin_CCF_realised', 'Default_Binary')
+dev_CCF_transition_matrix_freq   = matrix_prob(dev_CCF_transition_matrix)
+mon_CCF_transition_matrix        = matrix_obs(monitoring_set, 'Bin_CCF', 'Bin_CCF_realised', 'Default_Binary')
+mon_CCF_transition_matrix_freq   = matrix_prob(mon_CCF_transition_matrix)
 
 CCF_gAUC_init, CCF_gAUC_curr, CCF_S, CCF_p_val = CCF_tests().gAUC_CCF(mon_CCF_transition_matrix, dev_CCF_transition_matrix)
 #gAUC_data_CCF = development_set[['Bin_CCF', 'Bin_CCF_']]

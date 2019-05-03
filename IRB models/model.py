@@ -85,7 +85,11 @@ class model(object):
           
           return development, monitoring
 
-     def binning_monotonic(self, development, monitoring, var, var2, quantiles):
+     def binning_monotonic(self, development, monitoring, var, var2, quantiles, default):
+          #default: Indicates whether a variable that only has defaulted observations is being binned to avoid filtering out the performing observations [True or False]
+          #var: Variable used to calcualte the quantiles
+          #var2: Variable used to evaluate the ranking per quantile
+          #quantiles: number of quantiles
           development["Quantiles"]      = pd.to_numeric(pd.qcut(development[var], q = quantiles, labels=np.arange(0, quantiles))) #Calculate quantiles
           t1                            = pd.merge(    development[['Quantiles', var ]].astype(float).groupby('Quantiles', as_index=False).agg({var: [np.min, np.max]}), \
                                                        development[['Quantiles', var2]].astype(float).groupby('Quantiles', as_index=False).agg({var2: [np.mean]}) \
@@ -120,4 +124,11 @@ class model(object):
           i, j      =    np.where((monitoring[var][:, None] >= t2.MIN.values) & (monitoring[var][:, None] <= t2.MAX.values))
           t4        =    pd.DataFrame(np.column_stack([monitoring.values[i], t2.values[j]]),columns=monitoring.columns.append(t2.columns))
           t4.drop(['MIN', 'MAX'], axis=1, inplace=True)
+          if default == True:
+               t3_                           = development
+               t3_['Bin_' + var]             = float('NaN')
+               t3_[t3[var] != float('NaN')]  = t3['Bin_' + var]
+               t4_                           = monitoring
+               t4_['Bin_' + var]             = float('NaN')
+               t4_[t4[var] != float('NaN')]  = t4['Bin_' + var]
           return t3, t4
