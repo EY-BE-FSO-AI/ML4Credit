@@ -3,117 +3,48 @@
 ###          -Look into the possibility of loading in py scripts without having to declare import statements twice
 ###          -Think about the treatment of 2.2-2.4
 ########################################################################################################################
-###Import libraries###
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.stats import norm
-import sys
-import os
-import random
-#do we need to import pandas? import pandas as pd
 
 ### Define local directory ###
+import os
 local_dr  = os.path.normpath(os.path.expanduser("~/Documents/Python/GitHub/ML4Credit/IRB models"))
 local_dr2 = os.path.normpath(os.path.expanduser("~/Documents/Python/"))
 ### Add local directory ###
+import sys
 sys.path.append(local_dr)
-
-### Create development and monitoring data set ###
-# Cross check with 2.5.1: Specific definitions.
+###Import data set###
 from create_data_set import *
-
-first_monitoring_year = datetime.date(2015, 1, 1)
-df = pd.read_csv(local_dr2 + "/loan.csv", low_memory=False)
-development_set, monitoring_set = data_model(data=df, ldate=first_monitoring_year).split_data()
-
-### Probability of default (2.5)
-### Add PD variable###
-from model import *
-
-FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_num',
-            'funded_amnt_scaled', 'int_rate_scaled', 'inq_last_6mths_scaled', 'Income2TB_scaled']
-LABEL = 'Default_Binary'
-development_set, monitoring_set = model().PD_model(FEATURES, LABEL, development_set, monitoring_set, 'PD')
-#########################################################################################################################
-
-#LGD model
-FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_num',
-            'funded_amnt_scaled', 'int_rate_scaled', 'inq_last_6mths_scaled', 'Income2TB_scaled']
-LABEL = 'LGD_realised'
-development_set, monitoring_set = model().LGD_model(FEATURES, LABEL, development_set, monitoring_set, 'LGD')
-
-#CCF model
-FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_num',
-            'funded_amnt_scaled', 'int_rate_scaled', 'inq_last_6mths_scaled', 'Income2TB_scaled']
-LABEL = 'CCF_realised'
-development_set, monitoring_set = model().CCF_model(FEATURES, LABEL, development_set, monitoring_set, 'CCF')
-
-FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_num']
-LABEL = 'CCF_realised'
-development_set, monitoring_set = model().CCF_model(FEATURES, LABEL, development_set, monitoring_set, 'CCF_')
-
-###Bin PDs
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'PD', 'Default_Binary', 75, False)
-###Bin CCF
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF',  'CCF_realised', 75, False)
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF_realised',  'CCF_realised', 75, True)
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'CCF_', 'CCF_realised', 65, False)
-### Bin LGD
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'LGD', 'LGD_realised', 75, False)
-development_set, monitoring_set = model().binning_monotonic(development_set, monitoring_set, 'LGD_realised', 'LGD_realised', 23, True)
-
-### LGD Test
-### To be continued...
-
-### Test PD model ###
-
+development_set, validation_set = import_data().EY(local_dr2)
+###Validation tests###
 from Validation_tests import *
-
-### Qualitative validation tools (2.5.2) (on hold, not a priority) ###
-### Rating process statistics (2.5.2.1)
-### Occurrence of overrides (2.5.2.2)
-### Occurence of technical defaults (2.5.2.3)
-
-# Define validation set
-
-### Predictve ability (2.5.3)
-### PD back-testing using a Jeffreys test (2.5.3.1)
-# returns a dataframe with p-val column
-# original exposure at the beginning of the period should still be added.
-
+#####PD
+####### Qualitative validation tools (2.5.2) (on hold, not a priority) ###
+####### Rating process statistics (2.5.2.1)
+####### Occurrence of overrides (2.5.2.2)
+####### Occurence of technical defaults (2.5.2.3)
+####### Predictve ability (2.5.3)
 jeffrey_test = PD_tests().Jeffrey(development_set)
-
-### Discriminatory power test - AUC (2.5.4)
-### Current AUC vs AUC at initial validation/development (2.5.4.1)
-
+####### Discriminatory power test - AUC (2.5.4)
 validation_year = datetime.date(2016, 1, 1)
-AUC_validation_year, s_curr = PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.obs_dt > validation_year) | (monitoring_set.Default_date > validation_year)],
-                                        monitoring_set.grade_num[(monitoring_set.obs_dt > validation_year) | (monitoring_set.Default_date > validation_year)], 1)
+AUC_validation_year, s_curr = PD_tests().AUC(validation.Default_Binary[(validation.obs_dt > validation_year) | (validation.Default_date > validation_year)],
+                                        validation.grade_num[(validation.obs_dt > validation_year) | (validation.Default_date > validation_year)], 1)
 AUC_development, s_init = PD_tests().AUC(development_set.Default_Binary, development_set.grade_num, 0)
 AUC_S = (AUC_development - AUC_validation_year) / s_curr
 AUC_p = norm.pdf(AUC_S)
 AUC_dev_years = []
 for x in range(2007, 2014):
-    AUC_dev_years.append(PD_tests().AUC(monitoring_set.Default_Binary[(monitoring_set.obs_dt.astype("datetime64[ns]").dt.year == x) | (monitoring_set.Default_date.astype("datetime64[ns]").dt.year == x)],
-                                        monitoring_set.grade_num[(monitoring_set.obs_dt.astype("datetime64[ns]").dt.year == x) | (monitoring_set.Default_date.astype("datetime64[ns]").dt.year == x)], 0)[0])
+    AUC_dev_years.append(PD_tests().AUC(validation.Default_Binary[(validation.obs_dt.astype("datetime64[ns]").dt.year == x) | (validation.Default_date.astype("datetime64[ns]").dt.year == x)],
+                                        validation.grade_num[(validation.obs_dt.astype("datetime64[ns]").dt.year == x) | (validation.Default_date.astype("datetime64[ns]").dt.year == x)], 0)[0])
 AUC_bootstrap = []
 random.seed = 1
 for x in range(10000):
     sample = random.sample(range(len(development_set['Default_Binary'])), 10000)
     AUC_bootstrap.append(PD_tests().AUC(development_set.Default_Binary.iloc[sample], development_set.grade_num.iloc[sample], 0)[0])
 
-plt.boxplot(AUC_bootstrap)
-
 ### Stability (2.5.5)
 
 # Excluding defaulting customers
-transition_matrix        = matrix_obs(development_set, 'grade_num', 'Bin_PD', 'Default_Binary')
-transition_matrix_freq   = matrix_(transition_matrix)
+transition_matrix        = matrix().matrix_obs(development_set, 'grade_num', 'Bin_PD', 'Default_Binary')
+transition_matrix_freq   = matrix().matrix_prob(transition_matrix)
 
 ### Customer migrations (2.5.5.1)
 # To be developped
@@ -128,7 +59,7 @@ z_up, z_low, zUP_pval, zDOWN_pval = PD_tests().stability_migration_matrix(transi
 # calculate coefficient of variation and the herfindahl index
 K = len(development_set[development_set.Default_Binary == 0].grade.unique()) #number of rating grades for non-defaulted exposures
 CV_init, HI_init, _ = PD_tests().Herfindahl(development_set)
-CV_curr, HI_curr, _ = PD_tests().Herfindahl(monitoring_set)
+CV_curr, HI_curr, _ = PD_tests().Herfindahl(validation)
 cr_pval = 1 - norm.cdf(np.sqrt(K - 1) * (CV_curr - CV_init) / np.sqrt(CV_curr**2 * (0.5 + CV_curr**2)))
 
 
@@ -142,12 +73,12 @@ LGD_backtesting_pval = LGD_tests().backtesting(development_set)
 
 ### Discriminatory Power (2.6.3)
 ### gAUC for LGD (2.6.3.1)
-dev_LGD_transition_matrix        = matrix_obs(development_set, 'Bin_LGD', 'Bin_LGD_realised', 'Default_Binary')
-dev_LGD_transition_matrix_freq   = matrix_prob(dev_LGD_transition_matrix)
-mon_LGD_transition_matrix        = matrix_obs(monitoring_set, 'Bin_LGD', 'Bin_LGD_realised', 'Default_Binary')
-mon_LGD_transition_matrix_freq   = matrix_prob(mon_LGD_transition_matrix)
+dev_LGD_transition_matrix        = matrix().matrix_obs(development_set, 'Bin_LGD', 'Bin_LGD_realised', 'Default_Binary')
+dev_LGD_transition_matrix_freq   = matrix().matrix_prob(dev_LGD_transition_matrix)
+val_LGD_transition_matrix        = matrix().matrix_obs(validation_set, 'Bin_LGD', 'Bin_LGD_realised', 'Default_Binary')
+val_LGD_transition_matrix_freq   = matrix().matrix_prob(val_LGD_transition_matrix)
 
-LGD_gAUC_init, LGD_gAUC_curr, LGD_S, LGD_p_val = LGD_tests().gAUC_LGD(mon_LGD_transition_matrix, dev_LGD_transition_matrix)
+LGD_gAUC_init, LGD_gAUC_curr, LGD_S, LGD_p_val = LGD_tests().gAUC_LGD(val_LGD_transition_matrix_freq, dev_LGD_transition_matrix_freq)
 
 ### LGD: Qualitative validation tools (2.6.4)
 ### Population Stability Index(2.6.4.2)
@@ -168,12 +99,12 @@ CCF_backtesting_pval = CCF_tests().backtesting(development_set, 'CCF', 'CCF_')
 
 ### Discriminatory power (2.9.4)
 ### gAUC (2.9.4.1)
-dev_CCF_transition_matrix        = matrix_obs(development_set, 'Bin_CCF', 'Bin_CCF_realised', 'Default_Binary')
-dev_CCF_transition_matrix_freq   = matrix_prob(dev_CCF_transition_matrix)
-mon_CCF_transition_matrix        = matrix_obs(monitoring_set, 'Bin_CCF', 'Bin_CCF_realised', 'Default_Binary')
-mon_CCF_transition_matrix_freq   = matrix_prob(mon_CCF_transition_matrix)
+dev_CCF_transition_matrix        = matrix().matrix_obs(development_set, 'Bin_CCF', 'Bin_CCF_realised', 'Default_Binary')
+dev_CCF_transition_matrix_freq   = matrix().matrix_prob(dev_CCF_transition_matrix)
+val_CCF_transition_matrix        = matrix().matrix_obs(validation, 'Bin_CCF', 'Bin_CCF_realised', 'Default_Binary')
+val_CCF_transition_matrix_freq   = matrix().matrix_prob(val_CCF_transition_matrix)
 
-CCF_gAUC_init, CCF_gAUC_curr, CCF_S, CCF_p_val = CCF_tests().gAUC_CCF(mon_CCF_transition_matrix, dev_CCF_transition_matrix)
+CCF_gAUC_init, CCF_gAUC_curr, CCF_S, CCF_p_val = CCF_tests().gAUC_CCF(val_CCF_transition_matrix, dev_CCF_transition_matrix)
 #gAUC_data_CCF = development_set[['Bin_CCF', 'Bin_CCF_']]
 ### Qualitative validation tools (2.9.5)
 ### Population Stability Index (2.9.5.1)
@@ -213,6 +144,4 @@ PD_excel_input = {
     "stability_migration_matrix" : [z_up, z_low, zUP_pval, zDOWN_pval],
 }
 
-
 export().PD_toExcel( PD_excel_input )
-
