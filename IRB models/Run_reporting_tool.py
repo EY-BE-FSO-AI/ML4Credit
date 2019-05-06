@@ -24,28 +24,17 @@ from Validation_tests import *
 ####### Predictve ability (2.5.3)
 jeffrey_test = PD_tests().Jeffrey(development_set)
 ####### Discriminatory power test - AUC (2.5.4)
-validation_year = datetime.date(2016, 1, 1)
-AUC_validation_year, s_curr = PD_tests().AUC(validation_set.Default_Binary[(validation_set.obs_dt > validation_year) | (validation_set.Default_date > validation_year)],
-                                        validation_set.grade_num[(validation_set.obs_dt > validation_year) | (validation_set.Default_date > validation_year)], 1)
-AUC_development, s_init = PD_tests().AUC(development_set.Default_Binary, development_set.grade_num, 0)
-AUC_S = (AUC_development - AUC_validation_year) / s_curr
-AUC_p = norm.pdf(AUC_S)
-AUC_dev_years = []
-for x in range(2007, 2014):
-    AUC_dev_years.append(PD_tests().AUC(validation_set.Default_Binary[(validation_set.obs_dt.astype("datetime64[ns]").dt.year == x) | (validation_set.Default_date.astype("datetime64[ns]").dt.year == x)],
-                                        validation_set.grade_num[(validation_set.obs_dt.astype("datetime64[ns]").dt.year == x) | (validation_set.Default_date.astype("datetime64[ns]").dt.year == x)], 0)[0])
-AUC_bootstrap = []
-random.seed = 1
-for x in range(10000):
-    sample = random.sample(range(len(development_set['Default_Binary'])), 10000)
-    AUC_bootstrap.append(PD_tests().AUC(development_set.Default_Binary.iloc[sample], development_set.grade_num.iloc[sample], 0)[0])
-
+PD_AUC_val, PD_s_val = PD_tests().AUC(validation_set.Default_Binary, validation_set.grade_num, 1)
+PD_AUC_dev           = PD_tests().AUC(development_set.Default_Binary, development_set.grade_num, 0)
+PD_AUC_S             = general().test_stat(PD_AUC_dev, PD_AUC_val, PD_s_val)
+PD_AUC_p             = general().p_value(PD_AUC_S)
+#########Extra tests
+AUC_dev_years = extra_tests().range(development_set, 'out.append(PD_tests().AUC(df.Default_Binary,     df.grade_num,     0)[0])')
+AUC_bootstrap = extra_tests().boot( development_set, 'out.append(PD_tests().AUC(sample.Default_Binary, sample.grade_num, 0)[0])', 10000, 20000)
 ### Stability (2.5.5)
-
-# Excluding defaulting customers
+##### Excluding defaulting customers
 transition_matrix        = matrix().matrix_obs(development_set, 'grade_num', 'Bin_PD', 'Default_Binary')
 transition_matrix_freq   = matrix().matrix_prob(transition_matrix)
-
 ### Customer migrations (2.5.5.1)
 # To be developped
 # Create YYYY_rating column with a rating for each facility for each year
