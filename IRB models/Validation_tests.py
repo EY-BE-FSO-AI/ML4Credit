@@ -14,12 +14,38 @@ import math
 
 class matrix(object):
      
+     def check_square(self, M):
+          #Check whether matrix MemoryError is square
+          result = True if M.shape[0] == M.shape[1] else False
+          return result
+     
+     def square(self, M):
+          #Make matrix square in case it is not
+          if self.check_square(M) == False:
+               r   = M.shape[0] #Number of rows
+               c   = M.shape[1] #Number of columns
+               m   = max(r, c)  #Maximum between rows and columns 
+               if r < c:
+                    for i in range(1,(m+1)):
+                         if i not in M.index:
+                              row            = pd.DataFrame([[0] *c])
+                              row.index      = [i]
+                              row.columns    = range(1, (c+1)) 
+                              M              = M.append(row)
+                    M = M.sort_index()
+               else:
+                    for i in range(1,(m+1)):
+                         if i not in M.columns:
+                              M.insert(i-1, i, 0)
+          return M
+     
      ###Calculate observations for a 2D matrix###
      def matrix_obs(self, data, x, y, z):
           #x: variable used to create the rows of the matrix
           #y: variable used to create the columns of the matrix
           #z: variable used to calculate the sum per cell of the matrix
           matrix  = data[data[z] == 0].groupby([x, y]).size().unstack(fill_value=0)
+          matrix  = self.square(matrix)
           return matrix
           
      def matrix_prob(self, matrix):
