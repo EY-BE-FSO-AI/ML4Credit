@@ -55,7 +55,7 @@ class data_model(object):
           df["CCF_realised"]                        = np.maximum(0, 1 - pd.to_numeric(df['all_util'])/100)
           df.CCF_realised[df.all_util.isnull()]     = np.maximum(0, df.EAD_realised[df.all_util.isnull()] / (df.installment[df.all_util.isnull()] * df.term[df.all_util.isnull()]))
           end_date              = datetime.date(2016, 1, 1)
-          time_in_default       = end_date - df.Default_date
+          time_in_default       = end_date - df.Default_date.dt.date
           df["time_in_default"] = time_in_default.apply(lambda d: d.days / 365)
           df["LGD_realised"]    = (df.EAD_realised + df.collection_recovery_fee - df.recoveries * (1 + df.int_rate/100) ** (-df.time_in_default)) / (df.EAD_realised + df.collection_recovery_fee)
           df["LGD_realised"]    = np.minimum(1, np.maximum(0, df.LGD_realised) )
@@ -68,8 +68,8 @@ class data_model(object):
           df.CCF_realised[df.Default_Binary == 1].fillna(0)
           df.EAD_realised[df.Default_Binary == 1].fillna(0)
           ###Define development period and validation period###
-          development_set = df[(df.obs_dt < ldate)] # Application before ldate
-          validation_set = df[(df.obs_dt > ldate) | (df.Default_date > ldate)] #Application after ldate OR default after ldate
+          development_set = df[(df.obs_dt.dt.date < ldate)] # Application before ldate
+          validation_set = df[(df.obs_dt.dt.date > ldate) | (df.Default_date.dt.date > ldate)] #Application after ldate OR default after ldate
           ###Add PD variable###
           FEATURES = ['home_ownership_num', 'purpose_num', 'addr_state_num', 'emp_length_num', 'funded_amnt_scaled', 'int_rate_scaled', 'inq_last_6mths_scaled', 'Income2TB_scaled']
           LABEL = 'Default_Binary'
