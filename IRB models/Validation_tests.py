@@ -12,6 +12,21 @@ import numpy as np
 import pandas as pd
 import math
 
+class matrix(object):
+     
+     ###Calculate observations for a 2D matrix###
+     def matrix_obs(self, data, x, y, z):
+          #x: variable used to create the rows of the matrix
+          #y: variable used to create the columns of the matrix
+          #z: variable used to calculate the sum per cell of the matrix
+          matrix  = data[data[z] == 0].groupby([x, y]).size().unstack(fill_value=0)
+          return matrix
+          
+     def matrix_prob(self, matrix):
+          #matrix: the returned value of the matrix_obs function
+          matrix_ = matrix / matrix.sum(axis=0)
+          return matrix_
+
 class PD_tests(object):
 
      ###Discrimantory power test: Area Under the Curve###
@@ -50,14 +65,15 @@ class PD_tests(object):
          #alpha = D + 1/2
          #beta = Nc- D + 1/2
          
-         df_Jeffrey = name_set[['grade', 'PD', 'Default_Binary']]
-         aggregation = df_Jeffrey.groupby('grade').agg({'grade':'count', 'PD': ['sum','count'], 'Default_Binary': ['sum', 'count']})
-         aggregation.loc[len(aggregation) + 1] = aggregation.sum()
-         aggregation['actual_DF'] = aggregation[('Default_Binary', 'sum')] / aggregation[('Default_Binary', 'count')]
-         aggregation['alpha'] = aggregation[('Default_Binary', 'sum')] + 1/2
-         aggregation['beta'] = aggregation[('Default_Binary', 'count')] - aggregation[('Default_Binary', 'sum')] + 1/2
-         aggregation['H0PD'] = aggregation[('PD', 'sum')]/aggregation[('PD', 'count')]
-         aggregation['p_val'] = beta.cdf(aggregation['H0PD'], aggregation['alpha'], aggregation['beta'])
+         df_Jeffrey                               = name_set[['grade', 'PD', 'Default_Binary']]
+         df_Jeffrey[['PD', 'Default_Binary']]     = name_set[['PD', 'Default_Binary']].apply(lambda x: pd.to_numeric(x, errors='coerce'))
+         aggregation                              = df_Jeffrey.groupby('grade').agg({'grade':'count', 'PD': ['sum', 'count', 'mean'], 'Default_Binary': ['sum', 'count', 'mean']})
+         aggregation.loc[len(aggregation) + 1]    = aggregation.sum()
+         aggregation['actual_DF']                 = aggregation[('Default_Binary', 'mean')]
+         aggregation['alpha']                     = aggregation[('Default_Binary', 'sum')] + 1/2
+         aggregation['beta']                      = aggregation[('Default_Binary', 'count')] - aggregation[('Default_Binary', 'sum')] + 1/2
+         aggregation['H0PD']                      = aggregation[('PD', 'mean')]
+         aggregation['p_val']                     = beta.cdf(aggregation['H0PD'], aggregation['alpha'], aggregation['beta'])
          aggregation.rename(index={len(aggregation):'Portfolio'})
          return aggregation
     
