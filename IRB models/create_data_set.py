@@ -26,11 +26,11 @@ class data_model(object):
         
      def prepare_data(self, df, ldate):
           ###Convert dates to datetime###
-          df['obs_dt']          = df.issue_d.apply(lambda d: datetime.datetime.strptime(d, "%b-%Y").date())
+          df                    = df.assign(obs_dt=pd.to_datetime(df.issue_d, format="%b-%Y"))
           ###Removing missing default date (use next_payment_date and last_payment_date to infer default_date)###
           df["Default_date"]    = df.last_pymnt_d.fillna(df.next_pymnt_d)
           df                    = df[pd.notnull(df.Default_date)]
-          df["Default_date"]    = df.Default_date.apply(lambda d: datetime.datetime.strptime(d, "%b-%Y").date())
+          df                    = df.assign(Default_date=pd.to_datetime(df.Default_date, format="%b-%Y"))
           ####Default definition (given in the data model)###
           dflt_definition       = ['Default', 'Charged Off', 'Late (31-120 days)', 'Late (16-30 days)', 'Does not meet the credit policy. Status:Charged Off']
           df['Default_Binary']  = df.loan_status.apply(lambda s : 1 if s in dflt_definition else 0)
