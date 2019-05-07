@@ -35,18 +35,16 @@ class matrix(object):
                r   = M.shape[0] #Number of rows
                c   = M.shape[1] #Number of columns
                m   = max(r, c)  #Maximum between rows and columns 
-               if r < c:
-                    for i in range(1,(m+1)):
-                         if i not in M.index:
-                              row            = pd.DataFrame([[0] *c])
-                              row.index      = [i]
-                              row.columns    = range(1, (c+1)) 
-                              M              = M.append(row)
-                    M = M.sort_index()
-               else:
-                    for i in range(1,(m+1)):
-                         if i not in M.columns:
-                              M.insert(i-1, i, 0)
+               for i in range(1,(m+1)):
+                    if i not in M.index:
+                         row            = pd.DataFrame([[0] *c])
+                         row.index      = [i]
+                         row.columns    = range(1, (c+1)) 
+                         M              = M.append(row)
+               M = M.sort_index()
+               for i in range(1,(m+1)):
+                    if i not in M.columns:
+                         M.insert(i-1, i, 0)
           return M
      
      ###Calculate observations for a 2D matrix###
