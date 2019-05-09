@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import math
+import itertools
 
 class general(object):
 
@@ -79,6 +80,7 @@ class PD_tests(object):
           N1         = x.sum()
           N2         = len(x)-N1
           R          = y.rank()
+          global R1; global R2;
           R1         = R[x == True]
           R2         = R[x == False]
           ###Calculate Area Under the Curve###
@@ -88,14 +90,19 @@ class PD_tests(object):
           ###Variance AUC calculation [Optional and can only be applied to small samples]###
           s2 = []
           if z == True:
-               u                   = pd.MultiIndex.from_product([R1.tolist(), R2.tolist()]).to_frame()
-               u.columns           = ['A', 'B']
-               u['ab']             = 0
-               u.ab[u.A == u.B]    = 0.5
-               u.ab[u.A <  u.B]    = 1
-               V10                 = u.groupby(['A'], as_index=False)['ab'].sum().iloc[:, 1]/N2/N1
-               V01                 = u.groupby(['B'], as_index=False)['ab'].sum().iloc[:, 1]/N1/N2
-               s2                  = np.var(V10, ddof=1) + np.var(V01, ddof=1)
+               global Ua; global Ub;
+               Ua = pd.DataFrame([0] * R1.shape[0], columns=['a'])
+               Ub = pd.DataFrame([0] * R2.shape[0], columns=['b'])
+               def check_(a, b):
+                    globals()['Ua'].iloc[a] += 0.5 * (globals()['R1'].iloc[a] == globals()['R1'].iloc[b]) + 1 * (globals()['R1'].iloc[a] <  globals()['R1'].iloc[b])
+                    globals()['Ub'].iloc[b] += 0.5 * (globals()['R2'].iloc[a] == globals()['R2'].iloc[b]) + 1 * (globals()['R2'].iloc[a] <  globals()['R2'].iloc[b])
+               def check(a, n):
+                    list(map(lambda b: check_(a, b) , range(n)))
+               list(map(lambda a: check(a, R1.shape[0]), range(R2.shape[0])))
+               del Ua; del Ub; del R1; del R1;
+               V10  = Ua/N2/N1
+               V01  = Ub/N1/N2
+               s2   = np.var(V10, ddof=1) + np.var(V01, ddof=1)
           return AUC, s2
       
      ###Jeffrey's Test
@@ -452,4 +459,4 @@ class extra_tests:
           for i in range(n):
                sample = data.iloc[random.sample(range(data.shape[0]-1), size), :]
                exec(code)
-          return outS
+          return out
