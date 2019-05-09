@@ -14,7 +14,7 @@ import math
 
 class general(object):
 
-     def test_stat(x, y, z):
+     def test_stat(self, x, y, z):
           out = (x-y)/z
           return out
 
@@ -34,17 +34,24 @@ class matrix(object):
           if self.check_square(M) == False:
                r   = M.shape[0] #Number of rows
                c   = M.shape[1] #Number of columns
-               m   = max(r, c)  #Maximum between rows and columns 
-               for i in range(1,(m+1)):
-                    if i not in M.index:
-                         row            = pd.DataFrame([[0] *c])
-                         row.index      = [i]
-                         row.columns    = range(1, (c+1)) 
-                         M              = M.append(row)
-               M = M.sort_index()
-               for i in range(1,(m+1)):
-                    if i not in M.columns:
-                         M.insert(i-1, i, 0)
+               m   = max(r, c)  #Maximum between rows and columns
+               for i in M.index:
+                   if i not in M.columns:
+                       M[i] = [0] * len(M.index)
+               for j in M.columns:
+                   if j not in M.index:
+                       M.loc[j, :] = [0] * len(M.columns)
+               M = M.sort_index(axis=0).sort_index(axis=1)
+               # for i in range(1,(m+1)):
+               #      if i not in M.index:
+               #           row            = pd.DataFrame([[0] *c])
+               #           row.index      = [i]
+               #           row.columns    = range(1, (c+1))
+               #           M              = M.append(row)
+               # M = M.sort_index()
+               # for i in range(1,(m+1)):
+               #      if i not in M.columns:
+               #           M.insert(i-1, i, 0)
           return M
      
      ###Calculate observations for a 2D matrix###
@@ -59,7 +66,7 @@ class matrix(object):
      def matrix_prob(self, matrix):
           #matrix: the returned value of the matrix_obs function
           matrix_ = matrix / matrix.sum(axis=0)
-          return matrix_
+          return matrix_.fillna(0)
 
 class PD_tests(object):
 
@@ -223,18 +230,19 @@ class PD_tests(object):
 
 class LGD_tests(object):
 
-    def backtesting(self, data_set):
+    def backtesting(self, data_set, x, y):
         """
-        NOT THE FINAL VERSION
         LGD Back-testing using a t-test.
         Null-hypothesis is: estimatedLGD > realisedLGD. The test statistic is asymptotically Student-t distributed with
         N-1 degrees of freedom.
         :param data_set: development/monitoring sets
+        :param x:
+        :param y:
         :return:
         """
         #### Select estimated and realised LGDs for defaulting facilities
-        estimatedLGD = data_set[data_set.Default_Binary == 1].LGD
-        realisedLGD = data_set[data_set.Default_Binary == 1].LGD_realised
+        estimatedLGD = data_set[data_set.Default_Binary == 1][x]
+        realisedLGD = data_set[data_set.Default_Binary == 1][y]
         N = len(data_set[data_set.Default_Binary == 1])
 
         ### Construct test statistic 2.6.2.1
@@ -243,7 +251,21 @@ class LGD_tests(object):
 
         pval = 1 - t.cdf(t_stat, df=N-1) #one-sided
 
-        return pval
+        return [t_stat, s2, pval]
+
+    def backtesting_facilityGrade(self, data_set, x, y):
+        """
+        Similar to backtesting function. Returns backtesting results per facility grades.
+        :param data_set:
+        :param x:
+        :param y:
+        :return: backtesting results per facility grade -> test statistic, LGD estimated variance and p-value.
+        """
+        res = {}
+        for bin in data_set["Bin_{s}".format(s=x)].unique():
+            data_set_perGrade = data_set[data_set["Bin_{s}".format(s=x)] == bin]
+            res[bin] = self.backtesting(data_set_perGrade, x, y)
+        return res
 
     def gAUC_LGD(self, current_transMatrix, initial_transMatrix):
         """
@@ -252,13 +274,13 @@ class LGD_tests(object):
         :param initial_transMatrix: Pandas dataframe (LxL) with L grades/clusters for initial observation period;
         :return: Initial gAUC, current gAUC, test stat and p value.
         """
-        gAUC_init, s_init = gAUC(initial_transMatrix)
-        gAUC_curr, s_curr = gAUC(current_transMatrix)
+        gAUC_init, s_init = gAUC(initial_transMatrix).compute_gAUC_s()
+        gAUC_curr, s_curr = gAUC(current_transMatrix).compute_gAUC_s()
 
         S      = general().test_stat(gAUC_init, gAUC_curr, s_curr)
         p_val  = general().p_value(S)
 
-        return gAUC_init, gAUC_curr, S, p_val
+        return gAUC_init, gAUC_curr, S, s_curr, s_init, p_val
 
     def psi_lgd(self, data_set):
           ### Population stability index
@@ -269,114 +291,154 @@ class LGD_tests(object):
           return PSI
     
 class CCF_tests(object):
-    
-     def backtesting(self, data_set, x, y):
-          #### Select estimated and realised LGDs for defaulting facilities
-          estimatedCCF = data_set[x]
-          realisedCCF = data_set[y]
-          R = len(data_set)
-          ### Construct test statistic 2.9.3.1
-          s2 = (((realisedCCF - estimatedCCF).sum() - (realisedCCF - estimatedCCF).mean() )**2 ) / (R - 1)
-          t_stat = np.sqrt(R) * ((realisedCCF - estimatedCCF).mean()) / np.sqrt( s2 )
-          CCF_pval = 1 - t.cdf(t_stat, df=R-1) #one-sided
-          return CCF_pval
 
-     def gAUC_CCF(self, current_transMatrix, initial_transMatrix):
-          """
-          Computes the generalised AUC and test statistic for CCF (§2.9.4.1).
-          :param current_transMatrix: Pandas dataframe (LxL) with L grades/clusters for current observation period;
-          :param initial_transMatrix: Pandas dataframe (LxL) with L grades/clusters for initial observation period;
-          :return: Initial gAUC, current gAUC, test stat and p value.
-          """
-          gAUC_init, s_init = gAUC(initial_transMatrix)
-          gAUC_curr, s_curr = gAUC(current_transMatrix)
-          S         = general.test_stat(gAUC_init, gAUC_curr, s_curr)
-          p_val     = general.p_value(S)
-          return gAUC_init, gAUC_curr, S, p_val
+    def backtesting(self, data_set, x, y):
+        """
+        CCF Back-testing using a t-test.
+        Null-hypothesis is: estimatedCCF > realisedCCF. The test statistic is asymptotically Student-t distributed with
+        N-1 degrees of freedom.
+        :param data_set: development/monitoring sets
+        :param x:
+        :param y:
+        :return:
+        """
+        #### Select estimated and realised LGDs for defaulting facilities
+        estimatedCCF = data_set[data_set.Default_Binary == 1][x]
+        realisedCCF = data_set[data_set.Default_Binary == 1][y]
+        N = len(data_set[data_set.Default_Binary == 1])
 
-     def psi_ccf(self, data_set):
-          ### Population stability index
-          grade = data_set.groupby('grade').agg({'CCF': 'mean', 'CCF_': 'mean'})
-          PSI = 0
-          for i in range(0, len(grade)):
-               PSI += (grade.iloc[i, 1] - grade.iloc[i, 0]) * np.log(grade.iloc[i, 1] / grade.iloc[i, 0])
-          return PSI
+        ### Construct test statistic 2.6.2.1
+        s2 = (((realisedCCF - estimatedCCF).sum() - (realisedCCF - estimatedCCF).mean() )**2 ) / (N - 1)
+        t_stat = np.sqrt(N) * ((realisedCCF - estimatedCCF).mean()) / np.sqrt( s2 )
 
-     def A_lower_ij(trans_matrix, i, j):
-          temp = 0
-          for k in range (0, i):
-               for l in range(0,j):
-                    temp += trans_matrix.iloc[k,l]
-          return temp
+        pval = 1 - t.cdf(t_stat, df=N-1) #one-sided
 
-     def A_higher_ij(trans_matrix, i, j):
-          temp = 0
-          for k in range (i, len(trans_matrix)):
-               for l in range(j, len(trans_matrix)):
-                    temp += trans_matrix.iloc[k,l]
-          return temp
+        return [t_stat, s2, pval]
 
-     def D_left_ij(trans_matrix, i, j):
-          temp = 0
-          for k in range (i, len(trans_matrix)):
-               for l in range(0,j):
-                    temp += trans_matrix.iloc[k,l]
-          return temp
+    def backtesting_facilityGrade(self, data_set, x, y):
+        """
+        Similar to backtesting function. Returns backtesting results per facility grades.
+        :param data_set:
+        :return: backtesting results per facility grade -> test statistic, LGD estimated variance and p-value.
+        """
+        res = {}
+        for bin in data_set["Bin_{s}".format(s=x)].unique():
+            data_set_perGrade = data_set[data_set["Bin_{s}".format(s=x)] == bin]
+            res[bin] = self.backtesting(data_set_perGrade, x, y)
+        return res
 
-     def D_right_ij(trans_matrix, i, j):
-          temp = 0
-          for k in range (0, i):
-               for l in range(j, len(trans_matrix)):
-                    temp += trans_matrix.iloc[k,l]
-          return temp
+    def gAUC_CCF(self, current_transMatrix, initial_transMatrix):
+        """
+        Computes the generalised AUC and test statistic for CCF (§2.9.4.1).
+        :param current_transMatrix: Pandas dataframe (LxL) with L grades/clusters for current observation period;
+        :param initial_transMatrix: Pandas dataframe (LxL) with L grades/clusters for initial observation period;
+        :return: Initial gAUC, current gAUC, test stat and p value.
+        """
+        gAUC_init, s_init = gAUC(initial_transMatrix).compute_gAUC_s()
+        gAUC_curr, s_curr = gAUC(current_transMatrix).compute_gAUC_s()
+        S         = general().test_stat(gAUC_init, gAUC_curr, s_curr)
+        p_val     = general().p_value(S)
+        return gAUC_init, gAUC_curr, S, s_curr, s_init, p_val
 
-     def gAUC(transition_matrix):
-          """
-          Compute the gAUC and its standard deviation (see annex 3.2).
-          :param transition_matrix: as it says.
-          :return:
-          """
-          transition_matrix_A  = np.zeros((len(transition_matrix), len(transition_matrix)))
-          transition_matrix_D  = np.zeros((len(transition_matrix), len(transition_matrix)))
-          d                    = np.zeros((len(transition_matrix), len(transition_matrix)))
-          P                    = 0
-          Q                    = 0
-          for i in range(0, len(transition_matrix)):
-               for j in range(0, len(transition_matrix)):
-                    if i == j:
-                         transition_matrix_A[i, j]    =  0
-                         transition_matrix_D[i, j]    =  0
-                         P                            += transition_matrix.iloc[i, j] * transition_matrix_A[i, j]
-                         Q                            += transition_matrix.iloc[i, j] * transition_matrix_D[i, j]
-                         d[i, j]                      =  transition_matrix_A[i, j] - transition_matrix_D[i, j]
-               else:
-                    transition_matrix_A[i, j]    =  A_lower_ij(transition_matrix, i, j) + A_higher_ij(transition_matrix, i, j)
-                    transition_matrix_D[i, j]    =  D_left_ij(transition_matrix, i, j) + D_right_ij(transition_matrix, i, j)
-                    P                            += transition_matrix.iloc[i, j] * transition_matrix_A[i, j]
-                    Q                            += transition_matrix.iloc[i, j] * transition_matrix_D[i, j]
+    def psi_ccf(self, data_set):
+        ### Population stability index
+        grade = data_set.groupby('grade').agg({'CCF': 'mean', 'CCF_': 'mean'})
+        PSI = 0
+        for i in range(0, len(grade)):
+            PSI += (grade.iloc[i, 1] - grade.iloc[i, 0]) * np.log(grade.iloc[i, 1] / grade.iloc[i, 0])
+        return PSI
+
+
+
+class gAUC(object):
+    """
+    Class object for generalized AUC calculation. See IRB documentation annex 3.2.
+    """
+
+    def __init__(self, transMatrix):
+        """
+        :param transMatrix: transition matrix
+        """
+        self.transMatrix = transMatrix
+
+    def A_lower_ij(self, trans_matrix, i, j):
+        temp = 0
+        for k in range (0, i):
+            for l in range(0,j):
+                temp += trans_matrix.iloc[k,l]
+        return temp
+
+    def A_higher_ij(self, trans_matrix, i, j):
+        temp = 0
+        for k in range (i, len(trans_matrix)):
+            for l in range(j, len(trans_matrix)):
+                temp += trans_matrix.iloc[k,l]
+        return temp
+
+    def D_left_ij(self, trans_matrix, i, j):
+        temp = 0
+        for k in range (i, len(trans_matrix)):
+            for l in range(0,j):
+                temp += trans_matrix.iloc[k,l]
+        return temp
+
+    def D_right_ij(self, trans_matrix, i, j):
+        temp = 0
+        for k in range (0, i):
+            for l in range(j, len(trans_matrix)):
+                temp += trans_matrix.iloc[k,l]
+        return temp
+
+    def compute_gAUC_s(self):
+        """
+        Compute the gAUC and its standard deviation (see annex 3.2).
+        :param transition_matrix: as it says.
+        :return:
+        """
+        transition_matrix_A  = np.zeros((len(self.transMatrix), len(self.transMatrix)))
+        transition_matrix_D  = np.zeros((len(self.transMatrix), len(self.transMatrix)))
+        d                    = np.zeros((len(self.transMatrix), len(self.transMatrix)))
+        P                    = 0
+        Q                    = 0
+        for i in range(0, len(self.transMatrix)):
+            for j in range(0, len(self.transMatrix)):
+                if i == j:
+                    transition_matrix_A[i, j]    =  0
+                    transition_matrix_D[i, j]    =  0
+                    P                            += self.transMatrix.iloc[i, j] * transition_matrix_A[i, j]
+                    Q                            += self.transMatrix.iloc[i, j] * transition_matrix_D[i, j]
                     d[i, j]                      =  transition_matrix_A[i, j] - transition_matrix_D[i, j]
-          r          = transition_matrix.sum(axis=0).values
-          F          = transition_matrix.values.sum() ** 2
-          w_r        = F - (np.sum(r ** 2))
-          somersD    = (P - Q) / w_r
-          gAUC       = (somersD + 1) / 2
-     
-          # gAUC's standard deviation estimation:
-          s_rhs = 0
-          for i in range(0, len(transition_matrix)):
-               for j in range(0, len(transition_matrix)):
-                    s_rhs += transition_matrix.iloc[i, j] * (w_r * d[i, j] - (P - Q) * (F - r[i])) ** 2
-     
-          s = (1 / w_r ** 2) * np.sqrt(s_rhs)
-     
-          return gAUC, s
+                else:
+                    transition_matrix_A[i, j]    =  self.A_lower_ij(self.transMatrix, i, j) \
+                                                    + self.A_higher_ij(self.transMatrix, i, j)
+                    transition_matrix_D[i, j]    =  self.D_left_ij(self.transMatrix, i, j) \
+                                                    + self.D_right_ij(self.transMatrix, i, j)
+                    P                            += self.transMatrix.iloc[i, j] * transition_matrix_A[i, j]
+                    Q                            += self.transMatrix.iloc[i, j] * transition_matrix_D[i, j]
+                    d[i, j]                      =  transition_matrix_A[i, j] - transition_matrix_D[i, j]
+
+        r          = self.transMatrix.sum(axis=0).values
+        F          = self.transMatrix.values.sum() ** 2
+        w_r        = F - (np.sum(r ** 2))
+        somersD    = (P - Q) / w_r
+        gAUC       = (somersD + 1) / 2
+
+        # gAUC's standard deviation estimation:
+        s_rhs = 0
+        for i in range(0, len(self.transMatrix)):
+            for j in range(0, len(self.transMatrix)):
+                s_rhs += self.transMatrix.iloc[i, j] * (w_r * d[i, j] - (P - Q) * (F - r[i])) ** 2
+
+        s = (1 / w_r ** 2) * np.sqrt(s_rhs)
+
+        return gAUC, s
 
 class extra_tests:
      
      def range(self, data, code):
           ###Calculate metric for each observation year in the development data set
           out  = []
-          for i in validation_set.obs_dt.dt.year.unique():
+          for i in data.obs_dt.dt.year.unique():
                df   = data[data.obs_dt.dt.year == i]
                exec(code)
           return out
