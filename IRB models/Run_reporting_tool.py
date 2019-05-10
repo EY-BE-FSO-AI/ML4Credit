@@ -46,10 +46,7 @@ z_up, z_low, zUP_pval, zDOWN_pval = PD_tests().stability_migration_matrix(transi
 
 ### Concentration in rating grades (2.5.5.3)
 # calculate coefficient of variation and the herfindahl index
-K = len(development_set[development_set.Default_Binary == 0].grade.unique()) #number of rating grades for non-defaulted exposures
-CV_init, HI_init, _ = PD_tests().Herfindahl(development_set)
-CV_curr, HI_curr, _ = PD_tests().Herfindahl(validation_set)
-cr_pval = 1 - norm.cdf(np.sqrt(K - 1) * (CV_curr - CV_init) / np.sqrt(CV_curr**2 * (0.5 + CV_curr**2)))
+CV_init, HI_init, CV_curr, HI_curr, cr_pval = PD_tests().Herfindahl(development_set, validation_set)
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -128,7 +125,7 @@ export().LGD_toExcel(development_set, LGD_excel_inputs)
 
 CCF_excel_inputs = {
     "predictive_ability": [CCF_backtesting_ptf, CCF_backtesting_perGrade],
-    "AUC": [CCF_gAUC_init, CCF_gAUC_curr, CCF_S, CCF_curr_var, CCF_init_var, CCF_p_val],
+    "AUC": [CCF_gAUC_init, CCF_gAUC_curr, CCF_S, CCF_curr_var, CCF_p_val, CCF_init_var],
     "stability_migration_matrix": [z_up, z_low, zUP_pval, zDOWN_pval],
 }
 export().CCF_toExcel(development_set, CCF_excel_inputs)

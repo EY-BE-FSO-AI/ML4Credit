@@ -84,7 +84,7 @@ class export(object):
         oxl = self.open_wb(file_name)
 
         # Information missing from test results:
-        start_date 					= datetime.date(2007,1,1)
+        start_date 					= datetime.date(2007, 1, 1)
         end_date 					= datetime.date(2015, 1, 1)
         jeffrey_test				= pd_inputs["jeffrey"]
         name_rating_grades 			= jeffrey_test.index.tolist()[:-1]
@@ -157,25 +157,28 @@ class export(object):
         oxl = openpyxl.load_workbook(file_name)
 
         # Information missing from test results:
-        grade_nb = data_set.Bin_LGD.unique()
+        start_date = datetime.date(2007, 1, 1)
+        end_date = datetime.date(2015, 1, 1)
+        nb_customer = len(data_set.id.unique())
+        grade_nb = data_set[data_set.Default_Binary == 1].Bin_LGD.unique() #nb of estimated LGD bins/grades
         grade_name = []
-        grade_counts = []
         avLGDE_perGrade = []
         avLGDR_perGrade = []
         for g in range(1, len(grade_nb) + 1):
             grade_name.append( self.grade_mapping(grade_num = g) )
-            grade_counts.append( data_set[data_set.Default_Binary == 1]["Bin_LGD"].value_counts()[g] )
             avLGDE_perGrade.append( data_set.groupby("Bin_LGD").LGD.mean()[g] )
             avLGDR_perGrade.append( data_set.groupby("Bin_LGD").LGD_realised.mean()[g] )
 
-        nb_facilities = len(data_set.id.unique()) # check if correct
         avLGDE = data_set.LGD.mean()
         avLGDR = data_set.LGD_realised.mean()
 
         # Construct contingency table for sheet 2.1: frequency of realised LGD per bucket/grade of estimated LGD:
         rg = [0.0] + avLGDE_perGrade + [1.0]
-        ctgy_perGrade = data_set.groupby(["Bin_LGD", pd.cut(data_set.LGD_realised, rg)]).LGD_realised.count().unstack()
-        ctgy_ptf = data_set.groupby([pd.cut(data_set.LGD_realised, rg)]).LGD_realised.count().values
+        ctgy_perGrade = data_set[data_set.Default_Binary == 1].groupby(["Bin_LGD", pd.cut(data_set[data_set.Default_Binary == 1].LGD_realised, rg)]).LGD_realised.count().unstack()
+        ctgy_ptf = data_set[data_set.Default_Binary == 1].groupby([pd.cut(data_set[data_set.Default_Binary == 1].LGD_realised, rg)]).LGD_realised.count().values
+        grade_counts = ctgy_perGrade.sum(axis=1).values
+        nb_facilities = sum(grade_counts)
+
 
         # Predictive ability
         ## LGD back-testing using a t-test (§ 2.6.2.1) - sheet 2.0 or 2.1
@@ -187,24 +190,31 @@ class export(object):
             wbk2 = oxl.get_sheet_by_name("2.1")
             col_start = 4
             col_end = 30
-        self.array_toExcel(wb=wbk2, stat_array= grade_name, row_pos=9, col_pos=col_start, row_wise=True) #grade_name
-        self.array_toExcel(wb=wbk2, stat_array= grade_counts, row_pos=9, col_pos=col_start + 1, row_wise=True) # grade_counts
-        self.array_toExcel(wb=wbk2, stat_array= avLGDE_perGrade, row_pos=9, col_pos=7, row_wise=True) #avLGDE_perGrade
-        self.array_toExcel(wb=wbk2, stat_array= avLGDR_perGrade, row_pos=9, col_pos=8, row_wise=True) # avLGDR_perGrade
+        # Grade Level
+        self.array_toExcel(wb=wbk2, stat_array= grade_name, row_pos=9, col_pos=col_start, row_wise=True)
+        self.array_toExcel(wb=wbk2, stat_array= grade_counts, row_pos=9, col_pos=col_start + 1, row_wise=True)
+        self.array_toExcel(wb=wbk2, stat_array= avLGDE_perGrade, row_pos=9, col_pos=7, row_wise=True)
+        self.array_toExcel(wb=wbk2, stat_array= avLGDR_perGrade, row_pos=9, col_pos=8, row_wise=True)
         self.df_toExcel(wb=wbk2, df= ctgy_perGrade, row_pos=9, col_pos=9) #Contingency table
         self.df_toExcel(wb=wbk2, df= pd.DataFrame(lgd_inputs["predictive_ability"][1]).T, row_pos=9, col_pos=col_end) #per grade
-        self.array_toExcel(wb=wbk2, stat_array=lgd_inputs["predictive_ability"][0], row_pos=7, col_pos=col_end,
-                           row_wise=False) #ptf lvl
 
+        # Ptf lvl
+        self.array_toExcel(wb=wbk2, stat_array=lgd_inputs["predictive_ability"][0], row_pos=7, col_pos=col_end,
+                           row_wise=False)
         self.array_toExcel(wb=wbk2, stat_array=ctgy_ptf, row_pos=7, col_pos=9, row_wise=False)
-        wbk2.cell(row=7, column=5).value = nb_facilities
-        wbk2.cell(row=7, column=7).value = avLGDE
-        wbk2.cell(row=7, column=8).value = avLGDR
+        wbk2.cell(row=7, column=5).value = nb_facilities # Number of facilities
+        wbk2.cell(row=7, column=6).value = 0.0  # Number-weighted average of estimated LGD without downturn component(if available)
+        wbk2.cell(row=7, column=7).value = avLGDE # Number-weighted average of estimated LGD
+        wbk2.cell(row=7, column=8).value = avLGDR # Number-weighted average of realised LGD
 
         # Discriminatory Power
         ## Current gAUC vs gAUC at initial validation/development (§ 2.6.3.1) - sheet 3.0
         wbk30 = oxl.get_sheet_by_name("3.0")
-        self.array_toExcel(wb=wbk30, stat_array=lgd_inputs["AUC"], row_pos=7, col_pos=4, row_wise=False)
+        self.array_toExcel(wb=wbk30, stat_array=lgd_inputs["AUC"][:-1], row_pos=7, col_pos=4, row_wise=False)
+        wbk30.cell(row= 7, column= 9).value = start_date # start date
+        wbk30.cell(row=7, column=10).value = end_date # end date
+        wbk30.cell(row=7, column=11).value = nb_customer # nb of customers
+        wbk30.cell(row=7, column=12).value = lgd_inputs["AUC"][-1] # Variance (gAUC_init)
 
         # Save file
         oxl.save(file_name)
@@ -223,6 +233,9 @@ class export(object):
         oxl         = openpyxl.load_workbook(file_name)
 
         # Information missing from test results:
+        start_date	        = datetime.date(2007, 1, 1)
+        end_date	        = datetime.date(2015, 1, 1)
+        nb_customer         = len(data_set.id.unique())
         grade_nb            = data_set.Bin_CCF.unique()
         grade_name          = []
         grade_counts        = []
@@ -252,15 +265,37 @@ class export(object):
             q90CCFR_perGrade.append( data_set.groupby("Bin_CCF").CCF_realised.quantile(0.90)[g])
             q95CCFR_perGrade.append( data_set.groupby("Bin_CCF").CCF_realised.quantile(0.95)[g])
 
+        bcktesting_ccf_ptf = ["N/A", #Name of facility grade/pool or segment
+                              len(data_set.id.unique()), # Number of facilities (R)
+                              data_set.CCF.mean(), # Average estimated CCF (CCF^E)
+                              data_set.CCF_realised.mean(), # Average realised CCF (CCF^R)
+                              0.0, # Floor used (if applicable)
+                              0.0, # Number of CCF realisations floored
+                              data_set.CCF_realised.min(), # Minimum CCF^R
+                              data_set.CCF_realised.quantile(0.05), # Quantiles
+                              data_set.CCF_realised.quantile(0.10), #
+                              data_set.CCF_realised.quantile(0.25), #
+                              data_set.CCF_realised.quantile(0.50), #
+                              data_set.CCF_realised.quantile(0.75), #
+                              data_set.CCF_realised.quantile(0.90), #
+                              data_set.CCF_realised.quantile(0.95), #
+                              data_set.CCF_realised.max(),          # Maximum CCF^R
+                              0 # Exposure-weighted average of CCF^R (to be created)
+                              ]
+
         # Predictive ability
         ## CCF back-testing using a t-test (§ 2.9.3.1) - sheet 3.1
         wbk31 = oxl.get_sheet_by_name("3.1")
+        # Grade Lvl
         self.array_toExcel(wb=wbk31, stat_array = grade_name, row_pos=10, col_pos=4, row_wise=True)
         self.array_toExcel(wb=wbk31, stat_array = grade_counts, row_pos=10, col_pos=5, row_wise=True)
         self.array_toExcel(wb=wbk31, stat_array = avCCFE_perGrade, row_pos=10, col_pos=6, row_wise=True)
         self.array_toExcel(wb=wbk31, stat_array = avCCFR_perGrade, row_pos=10, col_pos=7, row_wise=True)
+        self.array_toExcel(wb=wbk31, stat_array=[0] * 7, row_pos=10, col_pos=8, row_wise=True) # Floor used (if applicable)
+        self.array_toExcel(wb=wbk31, stat_array=[0] * 7, row_pos=10, col_pos=9, row_wise=True) # Number of CCF realisations floored
         self.array_toExcel(wb=wbk31, stat_array= minCCFR_perGrade, row_pos=10, col_pos=10, row_wise=True)
         self.array_toExcel(wb=wbk31, stat_array= maxCCFR_perGrade, row_pos=10, col_pos=18, row_wise=True)
+        self.array_toExcel(wb=wbk31, stat_array=[0] * 7, row_pos=10, col_pos=19, row_wise=True) # Exposure-weighted average of CCF^R (to be created)
         self.array_toExcel(wb=wbk31, stat_array= q5CCFR_perGrade, row_pos=10, col_pos=11, row_wise=True)
         self.array_toExcel(wb=wbk31, stat_array= q10CCFR_perGrade, row_pos=10, col_pos=12, row_wise=True)
         self.array_toExcel(wb=wbk31, stat_array= q25CCFR_perGrade, row_pos=10, col_pos=13, row_wise=True)
@@ -268,14 +303,22 @@ class export(object):
         self.array_toExcel(wb=wbk31, stat_array= q75CCFR_perGrade, row_pos=10, col_pos=15, row_wise=True)
         self.array_toExcel(wb=wbk31, stat_array= q90CCFR_perGrade, row_pos=10, col_pos=16, row_wise=True)
         self.array_toExcel(wb=wbk31, stat_array= q95CCFR_perGrade, row_pos=10, col_pos=17, row_wise=True)
+        self.array_toExcel(wb=wbk31, stat_array= [0] * 7, row_pos=10, col_pos=23, row_wise=True) # Number of facilities excluded due to outlier handling (set to zero)
 
-        self.df_toExcel(wb=wbk31, df = pd.DataFrame(ccf_inputs["predictive_ability"][1]).T, row_pos=10, col_pos=20) #ptf
-        self.array_toExcel(wb=wbk31, stat_array=ccf_inputs["predictive_ability"][0], row_pos=8, col_pos=20, row_wise=True)
+        # Ptf Lvl
+        self.df_toExcel(wb=wbk31, df = pd.DataFrame(ccf_inputs["predictive_ability"][1]).T, row_pos=10, col_pos=20)
+        self.array_toExcel(wb=wbk31, stat_array=ccf_inputs["predictive_ability"][0], row_pos=8, col_pos=20, row_wise=False)
+        self.array_toExcel(wb=wbk31, stat_array=bcktesting_ccf_ptf, row_pos=8, col_pos=4, row_wise=False)
+        wbk31.cell(row=8, column=23).value = 0  # Number of facilities excluded due to outlier handling
 
         # Discriminatory Power
-        ## Current gAUC vs gAUC at initial validation/development (§ 2.6.3.1) - sheet 3.0
+        ## Current gAUC vs gAUC at initial validation/development (§ 2.9.3.1) - sheet 4.0
         wbk40 = oxl.get_sheet_by_name("4.0")
-        self.array_toExcel(wb=wbk40, stat_array=ccf_inputs["AUC"], row_pos=7, col_pos=4, row_wise=False)
+        self.array_toExcel(wb=wbk40, stat_array=ccf_inputs["AUC"][:-1], row_pos=7, col_pos=4, row_wise=False)
+        wbk40.cell(row= 7, column= 10).value = start_date # start date
+        wbk40.cell(row=7, column=11).value = end_date # end date
+        wbk40.cell(row=7, column=12).value = nb_customer # nb of customers
+        wbk40.cell(row=7, column=13).value = ccf_inputs["AUC"][-1] # Variance (gAUC_init)
 
         # Save file
         oxl.save(file_name)

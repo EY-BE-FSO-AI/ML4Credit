@@ -136,8 +136,22 @@ class PD_tests(object):
         #6. (The original exposure at the beginning of the relevant observation period)
     
     ###Concentration in rating grades (2.5.5.3)
+
+     def Herfindahl(self, development, validation):
+         """
+         Calculate Coefficient of Variation and Herfindahl Index for initial and current period,
+         and associated p value (see §2.5.5.3).
+         :param development:
+         :param validation:
+         :return:
+         """
+         K = len(development[development.Default_Binary == 0].grade.unique())
+         CV_init, HI_init = self.calculate_Herfindahl( development )
+         CV_curr, HI_curr = self.calculate_Herfindahl( validation )
+         cr_pval = 1 - norm.cdf(np.sqrt(K - 1) * (CV_curr - CV_init) / np.sqrt(CV_curr ** 2 * (0.5 + CV_curr ** 2)))
+         return CV_init, HI_init, CV_curr, HI_curr, cr_pval
     
-     def Herfindahl(self, name_set):
+     def calculate_Herfindahl(self, name_set):
         #calculate coefficient of variation
         #calculate HI
         
@@ -149,9 +163,7 @@ class PD_tests(object):
         df_herf_agg['CV_contrib'] = (df_herf_agg['R_i'] - 1 / len(df_herf_agg)) ** 2
         CV = (len(df_herf_agg) * df_herf_agg['CV_contrib'].sum())**(1/2)
         HI = 1 + math.log((CV**2 + 1) / len(df_herf_agg)) / math.log(len(df_herf_agg))
-        CV_p_val = "placeholder" #CV initial period to be computed and both are to be compared.
-        
-        return CV, HI, CV_p_val
+        return CV, HI
 
      def MWB(self, abs_freq, rel_freq):
         """
