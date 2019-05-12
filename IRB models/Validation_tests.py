@@ -3,13 +3,13 @@
 ###Comments: 
 ###          -Look into the possibilty to resolve cartesion product for large lists in AUC function
 ########################################################################################################################
-from scipy.stats import beta
-from scipy.stats import norm
-from scipy.stats import binom
-from scipy.stats import t
+from scipy.stats         import beta
+from scipy.stats         import norm
+from scipy.stats         import binom
+from scipy.stats         import t
 import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
+import numpy             as np
+import pandas            as pd
 import math
 import itertools
 
@@ -73,7 +73,6 @@ class PD_tests(object):
           N1         = x.sum()
           N2         = len(x)-N1
           R          = y.rank()
-          global R1; global R2;
           R1         = R[x == True]
           R2         = R[x == False]
           ###Calculate Area Under the Curve###
@@ -86,12 +85,12 @@ class PD_tests(object):
                global Ua; global Ub;
                Ua = pd.DataFrame([0] * R1.shape[0], columns=['a'])
                Ub = pd.DataFrame([0] * R2.shape[0], columns=['b'])
-               def check_(a, b):
-                    globals()['Ua'].iloc[a] += 0.5 * (globals()['R1'].iloc[a] == globals()['R1'].iloc[b]) + 1 * (globals()['R1'].iloc[a] <  globals()['R1'].iloc[b])
-                    globals()['Ub'].iloc[b] += 0.5 * (globals()['R2'].iloc[a] == globals()['R2'].iloc[b]) + 1 * (globals()['R2'].iloc[a] <  globals()['R2'].iloc[b])
-               def check(a, n):
-                    list(map(lambda b: check_(a, b) , range(n)))
-               list(map(lambda a: check(a, R1.shape[0]), range(R2.shape[0])))
+               def output(a, b, check, check2):
+                    dummy                    = check == check2
+                    dummy2                   = check <  check2
+                    globals()['Ua'].iloc[a] += 0.5 * dummy + 1 * dummy2
+                    globals()['Ub'].iloc[b] += 0.5 * dummy + 1 * dummy2
+               list(map(lambda a: list(map(lambda b: output(a, b, R1.iloc[a], R1.iloc[b]) , range(R1.shape[0]))), range(R2.shape[0])))
                del Ua; del Ub; del R1; del R1;
                V10  = Ua/N2/N1
                V01  = Ub/N1/N2
