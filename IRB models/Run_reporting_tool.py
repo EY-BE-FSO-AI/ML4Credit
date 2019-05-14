@@ -114,7 +114,7 @@ PD_excel_input = {
     "concentration_rating_grades" : [HI_init, HI_curr, cr_pval],
     "stability_migration_matrix" : [z_up, z_low, zUP_pval, zDOWN_pval],
 }
-export().PD_toExcel( PD_excel_input )
+export().PD_toExcel(development_set, PD_excel_input)
 
 LGD_excel_inputs = {
     "predictive_ability": [LGD_backtesting_ptf, LGD_backtesting_perGrade],
