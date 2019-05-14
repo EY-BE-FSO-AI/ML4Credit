@@ -10,8 +10,10 @@ from scipy.stats         import t
 import matplotlib.pyplot as plt
 import numpy             as np
 import pandas            as pd
+import _thread           as th
 import math
 import itertools
+import random
 
 class general(object):
 
@@ -80,8 +82,8 @@ class PD_tests(object):
           N1         = x.sum()
           N2         = len(x)-N1
           R          = y.rank()
-          R1         = R[x == True]
-          R2         = R[x == False]
+          R1         = R.loc[x == True]
+          R2         = R.loc[x == False]
           ###Calculate Area Under the Curve###
           U   = N1 * N2 + N1 * (N1 + 1)/2 - R1.sum()
           AUC = U / (N1 * N2)
@@ -89,19 +91,11 @@ class PD_tests(object):
           ###Variance AUC calculation [Optional and can only be applied to small samples]###
           s2 = []
           if z == True:
-               global Ua; global Ub;
-               Ua = pd.DataFrame([0] * R1.shape[0], columns=['a'])
-               Ub = pd.DataFrame([0] * R2.shape[0], columns=['b'])
-               def output(a, b, check, check2):
-                    dummy                    = check == check2
-                    dummy2                   = check <  check2
-                    globals()['Ua'].iloc[a] += 0.5 * dummy + 1 * dummy2
-                    globals()['Ub'].iloc[b] += 0.5 * dummy + 1 * dummy2
-               list(map(lambda a: list(map(lambda b: output(a, b, R1.iloc[a], R1.iloc[b]) , range(R1.shape[0]))), range(R2.shape[0])))
-               del Ua; del Ub; del R1; del R1;
-               V10  = Ua/N2/N1
-               V01  = Ub/N1/N2
-               s2   = np.var(V10, ddof=1) + np.var(V01, ddof=1)
+               Ua        = R1.apply(lambda a: sum(map(lambda b: 0.5 * (a == b) + 1 * (a <  b), R2)))
+               Ub        = R2.apply(lambda b: sum(map(lambda a: 0.5 * (a == b) + 1 * (a <  b), R1)))
+               V10       = Ua/N2/N1
+               V01       = Ub/N1/N2
+               s2        = np.var(V10, ddof=1) + np.var(V01, ddof=1)
           return AUC, s2
       
      ###Jeffrey's Test
