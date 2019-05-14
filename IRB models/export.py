@@ -94,7 +94,7 @@ class export(object):
         nb_default_pergrade 		= jeffrey_test[('Default_Binary', 'sum')].values[:-1]
         jeffrey_test_pval_pergrade 	= jeffrey_test.p_val.values[:-1]
         original_exposure_pergrade 	= data_set.groupby("grade").original_exposure.sum().values
-        jeffrey_test_pval_ptf 		= jeffrey_test.iloc[-1, -1]
+        jeffrey_test_pval_ptf 		= jeffrey_test.iloc[:, -1]
         nb_customer 				= len(data_set.id.unique())
 
         # Predictive ability
