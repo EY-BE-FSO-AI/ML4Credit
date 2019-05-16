@@ -3,14 +3,16 @@
 ###Comments: 
 ###          -Look into the possibilty to resolve cartesion product for large lists in AUC function
 ########################################################################################################################
-from scipy.stats         import beta
-from scipy.stats         import norm
-from scipy.stats         import binom
-from scipy.stats         import t
+from scipy.stats          import beta
+from scipy.stats          import norm
+from scipy.stats          import binom
+from scipy.stats          import t
+from dask.multiprocessing import get
 import matplotlib.pyplot as plt
 import numpy             as np
 import pandas            as pd
 import _thread           as th
+import dask.dataframe    as dd
 import math
 import itertools
 import random
@@ -91,8 +93,9 @@ class PD_tests(object):
           ###Variance AUC calculation [Optional and can only be applied to small samples]###
           s2 = []
           if z == True:
-               Ua        = R1.apply(lambda a: sum(map(lambda b: 0.5 * (a == b) + 1 * (a <  b), R2)))
-               Ub        = R2.apply(lambda b: sum(map(lambda a: 0.5 * (a == b) + 1 * (a <  b), R1)))
+               def aggregate(t1, t2): return t1.apply(lambda a: sum((a==t2)*0.5 + (a<t2)*1))
+               Ua        = dd.map_partitions(aggregate, dd.from_pandas(R1, npartitions=4), R2).compute(get=get)
+               Ub        = dd.map_partitions(aggregate, dd.from_pandas(R2, npartitions=4), R1).compute(get=get)
                V10       = Ua/N2/N1
                V01       = Ub/N1/N2
                s2        = np.var(V10, ddof=1) + np.var(V01, ddof=1)
