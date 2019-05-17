@@ -42,21 +42,11 @@ class matrix(object):
                m   = max(r, c)  #Maximum between rows and columns
                for i in M.index:
                    if i not in M.columns:
-                       M[i] = [0] * len(M.index)
+                       M[i]        = [0] * len(M.index)
                for j in M.columns:
                    if j not in M.index:
                        M.loc[j, :] = [0] * len(M.columns)
                M = M.sort_index(axis=0).sort_index(axis=1)
-               # for i in range(1,(m+1)):
-               #      if i not in M.index:
-               #           row            = pd.DataFrame([[0] *c])
-               #           row.index      = [i]
-               #           row.columns    = range(1, (c+1))
-               #           M              = M.append(row)
-               # M = M.sort_index()
-               # for i in range(1,(m+1)):
-               #      if i not in M.columns:
-               #           M.insert(i-1, i, 0)
           return M
      
      ###Calculate observations for a 2D matrix###
@@ -102,63 +92,57 @@ class PD_tests(object):
           return AUC, s2
       
      ###Jeffrey's Test
+     def Jeffrey(self, df, x, y , z):
+          #df is a dataframe object that contains columns x, y and z
+          #x aggregation variable (rating grade for PD test)
+          #y modelled variable
+          #z observed variable (expected to be binary)
+          #alpha = D + 1/2
+          #beta = Nc- D + 1/2
+          aggregation                              = df.groupby(x).agg({x:'count', y: ['sum', 'count', 'mean'], z: ['sum', 'count', 'mean']})
+          aggregation.loc[len(aggregation) + 1]    = aggregation.sum()
+          aggregation['Observed']                  = aggregation[(z, 'mean')]
+          aggregation['alpha']                     = aggregation[(z, 'sum')] + 1/2
+          aggregation['beta']                      = aggregation[(z, 'count')] - aggregation[(z, 'sum')] + 1/2
+          aggregation['H0']                        = aggregation[(y, 'mean')]
+          aggregation['p_val']                     = beta.cdf(aggregation['H0'], aggregation['alpha'], aggregation['beta'])
+          aggregation.rename(index={len(aggregation):'Portfolio'})
+          return aggregation
+          #return:
+          #for portfolio and rating classes:
+          #1. name of x
+          #2. y at the beginning of the relevant observation period
+          #3. The number of observations (=N)
+          #4. The number of flag=1 (sum of Defaults in case of PD)
+          #5. The p-value (one-sided, y > D/N)
+          #6. (The original exposure at the beginning of the relevant observation period)
 
-     def Jeffrey(self, name_set):
-         
-         #name_set is the tested data(sub)set
-         #alpha = D + 1/2
-         #beta = Nc- D + 1/2
-         
-         df_Jeffrey                               = name_set[['grade', 'PD', 'Default_Binary']]
-         df_Jeffrey[['PD', 'Default_Binary']]     = name_set[['PD', 'Default_Binary']].apply(lambda x: pd.to_numeric(x, errors='coerce'))
-         aggregation                              = df_Jeffrey.groupby('grade').agg({'grade':'count', 'PD': ['sum', 'count', 'mean'], 'Default_Binary': ['sum', 'count', 'mean']})
-         aggregation.loc[len(aggregation) + 1]    = aggregation.sum()
-         aggregation['actual_DF']                 = aggregation[('Default_Binary', 'mean')]
-         aggregation['alpha']                     = aggregation[('Default_Binary', 'sum')] + 1/2
-         aggregation['beta']                      = aggregation[('Default_Binary', 'count')] - aggregation[('Default_Binary', 'sum')] + 1/2
-         aggregation['H0PD']                      = aggregation[('PD', 'mean')]
-         aggregation['p_val']                     = beta.cdf(aggregation['H0PD'], aggregation['alpha'], aggregation['beta'])
-         aggregation.rename(index={len(aggregation):'Portfolio'})
-         return aggregation
-    
-
-        #return:
-        #for portfolio and rating classes:
-        #1. name of the rating grade
-        #2. PD at the beginning of the relevant observation period
-        #3. The number of customers (=N)
-        #4. The number of defaulted customers (=D)
-        #5. The p-value (one-sided, PD > D/N)
-        #6. (The original exposure at the beginning of the relevant observation period)
-    
-    ###Concentration in rating grades (2.5.5.3)
-
-     def Herfindahl(self, development, validation):
-         """
-         Calculate Coefficient of Variation and Herfindahl Index for initial and current period,
-         and associated p value (see §2.5.5.3).
-         :param development:
-         :param validation:
-         :return:
-         """
-         K = len(development[development.Default_Binary == 0].grade.unique())
-         CV_init, HI_init = self.calculate_Herfindahl( development )
-         CV_curr, HI_curr = self.calculate_Herfindahl( validation )
-         cr_pval = 1 - norm.cdf(np.sqrt(K - 1) * (CV_curr - CV_init) / np.sqrt(CV_curr ** 2 * (0.5 + CV_curr ** 2)))
+     def Herfindahl(self, dev, val, x, y, z1, z2):
+         #Calculate Coefficient of Variation and Herfindahl Index for initial and current period,
+         #dev is the dataframe of the development data set
+         #val is the dataframe of the validation data set
+         #x aggregation variable to evaluate the concentration level
+         #y binary flag (Default flag in case of PD)
+         #z1 aggregation variable (x or exposure)
+         #z2 aggregation function (count or sum)
+         #K nmuber of X unique values
+         K                = len(dev[x].loc[dev[y] == 0].unique())
+         CV_init, HI_init = self.calculate_Herfindahl(dev, x, z1, z2, K)
+         CV_curr, HI_curr = self.calculate_Herfindahl(val, x, z1, z2, K)
+         cr_pval          = 1 - norm.cdf(np.sqrt(K - 1) * (CV_curr - CV_init) / np.sqrt(CV_curr ** 2 * (0.5 + CV_curr ** 2)))
          return CV_init, HI_init, CV_curr, HI_curr, cr_pval
     
-     def calculate_Herfindahl(self, name_set):
+     def calculate_Herfindahl(self, df, x, z1, z2, K):
         #calculate coefficient of variation
-        #calculate HI
-        
-        #name_set = development_set
-        
-        df_herf = name_set[['grade']]
-        df_herf_agg = df_herf.groupby('grade').agg({'grade':'count'})
-        df_herf_agg['R_i'] = df_herf_agg['grade'] / df_herf_agg.grade.sum()
-        df_herf_agg['CV_contrib'] = (df_herf_agg['R_i'] - 1 / len(df_herf_agg)) ** 2
-        CV = (len(df_herf_agg) * df_herf_agg['CV_contrib'].sum())**(1/2)
-        HI = 1 + math.log((CV**2 + 1) / len(df_herf_agg)) / math.log(len(df_herf_agg))
+        #df input dataframe
+        #x aggregation variable to eavaluate the concentration level
+        #z1 aggregation variable (x or exposure)
+        #z2 aggregation function (count or sum
+        df_agg           = df.groupby(x).agg({z1 : z2})
+        df_agg['R_i']    = df_agg[z1] / df_agg.sum()
+        df_agg['CV_cb']  = (df_agg['R_i'] - 1 / K) ** 2
+        CV               = (K * df_agg['CV_cb'].sum())**(0.5)
+        HI               = 1 + math.log((CV**2 + 1) / K) / math.log(K)
         return CV, HI
 
      def MWB(self, abs_freq, rel_freq):
