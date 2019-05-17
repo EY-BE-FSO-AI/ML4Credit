@@ -52,7 +52,8 @@ class data_model(object):
           ###Add realised LGD and CCF###
           df.term                                      = df.term.str.replace(" months", "").astype(dtype=np.float64)
           df["original_exposure"]                      = df.installment * df.term
-          df["EAD_realised"]                           = df.original_exposure - df.total_pymnt  # Original amout - Amount already paid
+          df["exposure"]                               = df.original_exposure - df.total_pymnt  # Original amout - Amount already paid
+          df["EAD_realised"]                           = df.exposure
           df["CCF_realised"]                           = np.maximum(0, 1 - pd.to_numeric(df['all_util'])/100)
           df.CCF_realised[df.all_util.isnull()]        = np.maximum(0, df.EAD_realised[df.all_util.isnull()] / (df.installment[df.all_util.isnull()] * df.term[df.all_util.isnull()]))
           end_date                                     = datetime.date(2016, 1, 1)
