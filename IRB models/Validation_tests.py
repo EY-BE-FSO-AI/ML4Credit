@@ -85,9 +85,9 @@ class PD_tests(object):
                def aggregate(t1, t2): return t1.apply(lambda a: sum((a==t2)*0.5 + (a<t2)*1))
                Ua        = dd.map_partitions(aggregate, dd.from_pandas(R1, npartitions=4), R2).compute(scheduler='processes')
                Ub        = dd.map_partitions(aggregate, dd.from_pandas(R2, npartitions=4), R1).compute(scheduler='processes')
-               V10       = Ua/N2/N1
-               V01       = Ub/N1/N2
-               s2        = np.var(V10, ddof=1) + np.var(V01, ddof=1)
+               V10       = Ua/N2
+               V01       = Ub/N1
+               s2        = np.var(V10, ddof=1)/N1 + np.var(V01, ddof=1)/N2
           return AUC, s2
       
      ###Jeffrey's Test
@@ -155,29 +155,25 @@ class PD_tests(object):
           #return: upper_MWB: upper matrix bandwidth metric, lower_MWB: lower matrix bandwidth metric.
           abs_freq = abs_freq.as_matrix()
           rel_freq = rel_freq.as_matrix()
-          n_i = abs_freq.sum(axis = 1)
-          K = len(abs_freq)
+          n_i      = abs_freq.sum(axis = 1)
+          K        = len(abs_freq)
           M_norm_u = 0
+          temp     = 0
           for i in range(K-1):
                sum_rel_frq_row   = 0
                for j in range(i, K):
                     sum_rel_frq_row    += rel_freq[i,j]
-               M_norm_u += max(abs(i - K), abs(i)) * sum_rel_frq_row * n_i[i]
+                    temp               += abs(i - j) * n_i[i] * rel_freq[i, j]
+               M_norm_u += max(abs(i + 1 - K), abs(i)) * sum_rel_frq_row * n_i[i]
           M_norm_l = 0
+          temp     = 0
           for i in range(1, K):
                sum_rel_frq_row = 0
                for j in range(i-1):
                     sum_rel_frq_row    += rel_freq[i,j]
-               M_norm_l += max(abs(i - K), abs(i)) * sum_rel_frq_row * n_i[i]
-          temp = 0
-          for i in range(K-1):
-               for j in range(i+1, K):
-                    temp += abs(i - j) * n_i[i] * rel_freq[i, j]
+                    temp               += abs(i - j) * n_i[i] * rel_freq[i, j]
+               M_norm_l += max(abs(i + 1 - K), abs(i)) * sum_rel_frq_row * n_i[i]
           upper_MWB = temp / M_norm_u 
-          temp = 0
-          for i in range(1, K):
-               for j in range(i-1):
-                    temp += abs(i - j) * n_i[i] * rel_freq[i, j]
           lower_MWB = temp / M_norm_l
           return upper_MWB, lower_MWB
 
@@ -189,12 +185,12 @@ class PD_tests(object):
           N = abs_freq.sum(axis=1).values
           p = rel_freq.as_matrix()
           K = len(p)
-          z = np.zeros(p.shape)
+          z = np.zeros(p.shape) * np.nan
           for i in range(K):
                for j in range(K):
                     if i>j>=0:
                          z[i, j] = (p[i, j + 1] - p[i, j]) / np.sqrt((p[i, j] * (1 - p[i, j]) + p[i, j + 1] * (1 - p[i, j + 1]) + 2 * p[i, j] * p[i, j + 1]) / N[i])
-                    else:
+                    if i<j<=K:
                          z[i, j] = (p[i, j - 1] - p[i, j]) / np.sqrt((p[i, j] * (1 - p[i, j]) + p[i, j - 1] * (1 - p[i, j - 1]) + 2 * p[i, j] * p[i, j - 1]) / N[i])
           z_pval    = norm.cdf(z) # one-sided
           return z, z_pval
