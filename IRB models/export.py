@@ -73,77 +73,68 @@ class export(object):
             self.array_toExcel(wb, df.iloc[i,:].values, row_pos + i, col_pos, row_wise = False)
         return None
 
-    def PD_toExcel(self, data_set, pd_inputs):
-        """
-        Fill PD test statistics and other information to Excel file;
-		:param data_set: development data set
-        :param pd_inputs: dictionary containing pd test results, details etc.
-        :return: Save to excel results.
-        """
-        file_name = self.file_path(target_filename="LEICode_PD_ModelID_EndOfObservationPeriod_versionNumber.xlsx")
-        oxl = self.open_wb(file_name)
-
-        # Information missing from test results:
-        start_date 					= datetime.date(2007, 1, 1)
-        end_date 					= datetime.date(2015, 1, 1)
-        jeffrey_test				= pd_inputs["jeffrey"]
-        name_rating_grades 			= jeffrey_test.index.tolist()[:-1]
-        nb_rating_grades 			= len(data_set.grade.unique())
-        averagePD_pergrade 			= data_set.groupby("grade").PD.mean().values
-        nb_customer_pergrade 		= data_set.grade.value_counts().sort_index().values
-        nb_default_pergrade 		= jeffrey_test[('Default_Binary', 'sum')].values[:-1]
-        jeffrey_test_pval_pergrade 	= jeffrey_test.p_val.values[:-1]
-        original_exposure_pergrade 	= data_set.groupby("grade").original_exposure.sum().values
-        jeffrey_test_pval_ptf 		= jeffrey_test.iloc[:, -1]
-        nb_customer 				= len(data_set.id.unique())
-
-        # Predictive ability
-        ## PD Back-testing using a Jeffreys test (§ 2.5.3.1) - sheet 3.0
-        ### Grade Level
-        wbk30 = oxl.get_sheet_by_name("3.0")
-        self.array_toExcel(wb = wbk30, stat_array = name_rating_grades, row_pos= 8, col_pos= 4) # Rating grade names
-        self.array_toExcel(wb = wbk30, stat_array = averagePD_pergrade, row_pos= 8, col_pos= 5) # Average PD
-        self.array_toExcel(wb = wbk30, stat_array = nb_customer_pergrade, row_pos= 8, col_pos= 6) # Nb of customers
-        self.array_toExcel(wb = wbk30, stat_array = nb_default_pergrade, row_pos= 8, col_pos= 7) # Nb of defaults
-        self.array_toExcel(wb = wbk30, stat_array = jeffrey_test_pval_pergrade, row_pos= 8, col_pos= 8) # Jeffrey p-vals
-        self.array_toExcel(wb = wbk30, stat_array = original_exposure_pergrade, row_pos= 8, col_pos= 9) # Original exposure
-        ### Portfolio Level
-        self.array_toExcel(wb = wbk30, stat_array = jeffrey_test_pval_ptf, row_pos= 6, col_pos= 8) # Jeffrey p-vals at ptf lvl
-
-        # Discriminatory Power
-        ## Current AUC vs AUC at initial validation/development (§ 2.5.4.1) - sheet 4.0
-        wbk40 = oxl.get_sheet_by_name("4.0")
-        self.array_toExcel(wb=wbk40, stat_array=pd_inputs["AUC"], row_pos=7, col_pos=4, row_wise=False)
-        wbk40.cell(row= 7, column= 10).value = start_date # start date
-        wbk40.cell(row=7, column=11).value = end_date # end date
-        wbk40.cell(row=7, column=12).value = nb_customer # nb of customers
-        wbk40.cell(row=7, column=13).value = nb_customer # nb of customers
-
-        # Stability - Customer Migration
-        ## Current AUC vs AUC at initial validation/development (§ 2.5.4.1) - sheet 4.0
-        self.array_toExcel(wb=wbk40, stat_array=pd_inputs["concentration_rating_grades"], row_pos=18, col_pos=4,
-        row_wise=False)
-        ## Customer Migrations (§ 2.5.5.1) - sheet 5.1
-        wbk51 = oxl.get_sheet_by_name("5.1")
-        self.array_toExcel(wb=wbk51, stat_array=pd_inputs["customer_migrations"], row_pos=7, col_pos=4,row_wise=False)
-
-        # Stability - Stability of Migrations
-        ## Customer Migrations (§ 2.5.5.2) - sheet 5.2
-        wbk52 = oxl.get_sheet_by_name("5.2")
-        transMatrix = pd_inputs["stability_migration_matrix"][0]
-        z_ij = pd_inputs["stability_migration_matrix"][1] + pd_inputs["stability_migration_matrix"][2]
-        phi_zij = pd_inputs["stability_migration_matrix"][3] + pd_inputs["stability_migration_matrix"][4]
-        c = 0
-        for j in range(len(transMatrix.columns)):
-            self.array_toExcel(wb=wbk52, stat_array= transMatrix.iloc[:, j], row_pos=7, col_pos=(4 + c))
-            self.array_toExcel(wb=wbk52, stat_array= z_ij[:, j], row_pos=7, col_pos=(5 + c))
-            self.array_toExcel(wb=wbk52, stat_array= phi_zij[:, j], row_pos=7, col_pos=(6 + c))
-            c += 3
-
-        # Save file
-        oxl.save( file_name )
-        oxl.close()
-        return "PD results saved to Excel."
+    def PD_toExcel(self, pd_inputs):
+          #Fill PD test statistics and other information to Excel file;
+	     #param data_set: development data set
+          #param pd_inputs: dictionary containing pd test results, details etc.
+          #return: Save to excel results.
+          file_name = self.file_path(target_filename=pd_inputs["name"])
+          oxl = self.open_wb(file_name)
+          # Information missing from test results:
+          start_date 				= pd_inputs["start"]
+          end_date 					= pd_inputs["end"]
+          jeffrey_test				= pd_inputs["jeffrey"].iloc[:-1, :]
+          name_rating_grades 			= jeffrey_test.index.tolist()
+          nb_rating_grades 			= len(name_rating_grades)
+          averagePD_pergrade 			= pd_inputs['avg_PD']
+          nb_customer_pergrade 		= pd_inputs['nb_cust']
+          nb_default_pergrade 		= jeffrey_test[('Default_Binary', 'sum')].values
+          original_exposure_pergrade 	= pd_inputs['orgExp_Grade']
+          jeffrey_test_pval_ptf 		= pd_inputs["jeffrey"].iloc[-1, -1]
+          nb_customer 				= sum(nb_customer_pergrade)
+          # Predictive ability
+          ## PD Back-testing using a Jeffreys test (§ 2.5.3.1) - sheet 3.0
+          ### Grade Level
+          wbk30 = oxl.get_sheet_by_name("3.0")
+          self.array_toExcel(wb = wbk30, stat_array = name_rating_grades, row_pos= 8, col_pos= 4)          # Rating grade names
+          self.array_toExcel(wb = wbk30, stat_array = averagePD_pergrade, row_pos= 8, col_pos= 5)          # Average PD
+          self.array_toExcel(wb = wbk30, stat_array = nb_customer_pergrade, row_pos= 8, col_pos= 6)        # Nb of customers
+          self.array_toExcel(wb = wbk30, stat_array = nb_default_pergrade, row_pos= 8, col_pos= 7)         # Nb of defaults
+          self.array_toExcel(wb = wbk30, stat_array = jeffrey_test.p_val, row_pos= 8, col_pos= 8)          # Jeffrey p-vals
+          self.array_toExcel(wb = wbk30, stat_array = original_exposure_pergrade, row_pos= 8, col_pos= 9)  # Original exposure
+          ### Portfolio Level
+          wbk30.cell(row = 6, column = 8).value     = jeffrey_test_pval_ptf                                # Jeffrey p-vals at ptf lvl
+          # Discriminatory Power
+          ## Current AUC vs AUC at initial validation/development (§ 2.5.4.1) - sheet 4.0
+          wbk40 = oxl.get_sheet_by_name("4.0")
+          self.array_toExcel(wb=wbk40, stat_array = pd_inputs["AUC"], row_pos=7, col_pos=4, row_wise=False)  # AUC
+          wbk40.cell(row=7, column=10).value     = start_date                                                # start date
+          wbk40.cell(row=7, column=11).value     = end_date                                                  # end date
+          wbk40.cell(row=7, column=12).value     = nb_customer                                               # nb of customers
+          wbk40.cell(row=7, column=13).value     = pd_inputs["AUC_init"]                                     # nb of customers
+          wbk40.cell(row=18, column=8).value     = start_date                                                # nb of customers
+          wbk40.cell(row=18, column=9).value     = end_date                                                  # nb of customers
+          wbk40.cell(row=18, column=10).value    = nb_customer                                               # nb of customers
+          wbk40.cell(row=18, column=11).value    = nb_rating_grades                                          # nb of customers
+          # Stability - Customer Migration
+          ## Current AUC vs AUC at initial validation/development (§ 2.5.4.1) - sheet 4.0
+          self.array_toExcel(wb=wbk40, stat_array=pd_inputs["concentration_rating_grades"], row_pos=18, col_pos=4, row_wise=False)
+          ## Customer Migrations (§ 2.5.5.1) - sheet 5.1
+          wbk51 = oxl.get_sheet_by_name("5.1")
+          self.array_toExcel(wb=wbk51, stat_array=pd_inputs["customer_migrations"], row_pos=7, col_pos=4,row_wise=False)
+          # Stability - Stability of Migrations
+          ## Customer Migrations (§ 2.5.5.2) - sheet 5.2
+          wbk52 = oxl.get_sheet_by_name("5.2")
+          c = 0
+          for j in range(len(pd_inputs["stability_migration_matrix"][0])):
+               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][0].iloc[:, j], row_pos=7, col_pos=(4 + c))      # transition probability
+               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][1][:, j], row_pos=7, col_pos=(5 + c))           # z
+               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][2][:, j], row_pos=7, col_pos=(6 + c))           # phi
+               c += 3
+          # Save file
+          oxl.save( file_name )
+          oxl.close()
+          return "PD results saved to Excel."
 
     def LGD_toExcel(self, data_set, lgd_inputs):
         """
