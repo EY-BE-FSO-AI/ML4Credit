@@ -7,12 +7,11 @@ from scipy.stats          import beta
 from scipy.stats          import norm
 from scipy.stats          import binom
 from scipy.stats          import t
-from dask.multiprocessing import get
-import matplotlib.pyplot as plt
-import numpy             as np
-import pandas            as pd
-import _thread           as th
-import dask.dataframe    as dd
+import matplotlib.pyplot      as plt
+import numpy                  as np
+import pandas                 as pd
+import _thread                as th
+import dask.dataframe         as dd
 import math
 import itertools
 import random
@@ -60,7 +59,7 @@ class matrix(object):
           
      def matrix_prob(self, matrix):
           #matrix: the returned value of the matrix_obs function
-          matrix_ = matrix / matrix.sum(axis=0)
+          matrix_ = matrix.div(matrix.sum(axis=1), axis=0)
           return matrix_.fillna(0)
 
 class PD_tests(object):
@@ -84,8 +83,8 @@ class PD_tests(object):
           s2 = []
           if z == True:
                def aggregate(t1, t2): return t1.apply(lambda a: sum((a==t2)*0.5 + (a<t2)*1))
-               Ua        = dd.map_partitions(aggregate, dd.from_pandas(R1, npartitions=4), R2).compute(get=get)
-               Ub        = dd.map_partitions(aggregate, dd.from_pandas(R2, npartitions=4), R1).compute(get=get)
+               Ua        = dd.map_partitions(aggregate, dd.from_pandas(R1, npartitions=4), R2).compute(scheduler='processes')
+               Ub        = dd.map_partitions(aggregate, dd.from_pandas(R2, npartitions=4), R1).compute(scheduler='processes')
                V10       = Ua/N2/N1
                V01       = Ub/N1/N2
                s2        = np.var(V10, ddof=1) + np.var(V01, ddof=1)
@@ -100,13 +99,17 @@ class PD_tests(object):
           #alpha = D + 1/2
           #beta = Nc- D + 1/2
           aggregation                              = df.groupby(x).agg({x:'count', y: ['sum', 'count', 'mean'], z: ['sum', 'count', 'mean']})
-          aggregation.loc[len(aggregation) + 1]    = aggregation.sum()
           aggregation['Observed']                  = aggregation[(z, 'mean')]
           aggregation['alpha']                     = aggregation[(z, 'sum')] + 1/2
-          aggregation['beta']                      = aggregation[(z, 'count')] - aggregation[(z, 'sum')] + 1/2
+          aggregation['beta']                      = aggregation[(z, 'count')] - aggregation['alpha'] + 1
           aggregation['H0']                        = aggregation[(y, 'mean')]
           aggregation['p_val']                     = beta.cdf(aggregation['H0'], aggregation['alpha'], aggregation['beta'])
-          aggregation.rename(index={len(aggregation):'Portfolio'})
+          aggregation.loc['Portfolio']             = aggregation.sum()
+          aggregation['Observed'].loc['Portfolio'] = df.agg({z: 'mean'}).values
+          aggregation['alpha'].loc['Portfolio']    = df.agg({z: 'sum' }).values + 1/2
+          aggregation['beta'].loc['Portfolio']     = df.agg({z: 'count'}).values - aggregation['alpha'].loc['Portfolio'] + 1
+          aggregation['H0'].loc['Portfolio']       = df.agg({y: 'mean'}).values
+          aggregation['p_val'].loc['Portfolio']    = beta.cdf(aggregation['H0'].loc['Portfolio'], aggregation['alpha'].loc['Portfolio'], aggregation['beta'].loc['Portfolio'])
           return aggregation
           #return:
           #for portfolio and rating classes:
@@ -118,114 +121,83 @@ class PD_tests(object):
           #6. (The original exposure at the beginning of the relevant observation period)
 
      def Herfindahl(self, dev, val, x, y, z1, z2):
-         #Calculate Coefficient of Variation and Herfindahl Index for initial and current period,
-         #dev is the dataframe of the development data set
-         #val is the dataframe of the validation data set
-         #x aggregation variable to evaluate the concentration level
-         #y binary flag (Default flag in case of PD)
-         #z1 aggregation variable (x or exposure)
-         #z2 aggregation function (count or sum)
-         #K nmuber of X unique values
-         K                = len(dev[x].loc[dev[y] == 0].unique())
-         CV_init, HI_init = self.calculate_Herfindahl(dev, x, z1, z2, K)
-         CV_curr, HI_curr = self.calculate_Herfindahl(val, x, z1, z2, K)
-         cr_pval          = 1 - norm.cdf(np.sqrt(K - 1) * (CV_curr - CV_init) / np.sqrt(CV_curr ** 2 * (0.5 + CV_curr ** 2)))
-         return CV_init, HI_init, CV_curr, HI_curr, cr_pval
+          #Calculate Coefficient of Variation and Herfindahl Index for initial and current period,
+          #dev is the dataframe of the development data set
+          #val is the dataframe of the validation data set
+          #x aggregation variable to evaluate the concentration level
+          #y binary flag (Default flag in case of PD)
+          #z1 aggregation variable (x or exposure)
+          #z2 aggregation function (count or sum)
+          #K nmuber of X unique values
+          K                = len(dev[x].loc[dev[y] == 0].unique())
+          CV_init, HI_init = self.calculate_Herfindahl(dev, x, z1, z2, K)
+          CV_curr, HI_curr = self.calculate_Herfindahl(val, x, z1, z2, K)
+          cr_pval          = 1 - norm.cdf(np.sqrt(K - 1) * (CV_curr - CV_init) / np.sqrt(CV_curr ** 2 * (0.5 + CV_curr ** 2)))
+          return CV_init, HI_init, CV_curr, HI_curr, cr_pval
     
      def calculate_Herfindahl(self, df, x, z1, z2, K):
-        #calculate coefficient of variation
-        #df input dataframe
-        #x aggregation variable to eavaluate the concentration level
-        #z1 aggregation variable (x or exposure)
-        #z2 aggregation function (count or sum
-        df_agg           = df.groupby(x).agg({z1 : z2})
-        df_agg['R_i']    = df_agg[z1] / df_agg.sum()
-        df_agg['CV_cb']  = (df_agg['R_i'] - 1 / K) ** 2
-        CV               = (K * df_agg['CV_cb'].sum())**(0.5)
-        HI               = 1 + math.log((CV**2 + 1) / K) / math.log(K)
-        return CV, HI
+          #calculate coefficient of variation
+          #df input dataframe
+          #x aggregation variable to eavaluate the concentration level
+          #z1 aggregation variable (x or exposure)
+          #z2 aggregation function (count or sum
+          df_agg           = df.groupby(x).agg({z1 : z2})
+          df_agg['R_i']    = df_agg[z1] / df_agg.sum()
+          df_agg['CV_cb']  = (df_agg['R_i'] - 1 / K) ** 2
+          CV               = (K * df_agg['CV_cb'].sum())**(0.5)
+          HI               = 1 + math.log((CV**2 + 1) / K) / math.log(K)
+          return CV, HI
 
      def MWB(self, abs_freq, rel_freq):
-        """
-        Compute the matrix weighted bandwidth metric (§ 2.5.5.1);
-        :param abs_freq: transition matrix(KxK)with number of customer changes per grades;
-        :param rel_freq: transition matrix(KxK) with relative frequency of customer grade change.
-        :return: upper_MWB: upper matrix bandwidth metric, lower_MWB: lower matrix bandwidth metric.
-        """""
-         
-        abs_freq = abs_freq.as_matrix()
-        rel_freq = rel_freq.as_matrix()
-
-        n_i = abs_freq.sum(axis = 1)
-        K = len(abs_freq)
-         
-        M_norm_u = 0
-        for i in range(1, K - 1):
-            M_scalar_i = 0
-            sum_rel_frq_row = 0
-            for j in range(i+1, K):
-                M_scalar_i = max(abs(i - K), abs(i-1))
-                sum_rel_frq_row = sum_rel_frq_row + rel_freq[i,j]
-        
-            M_norm_u += M_scalar_i * sum_rel_frq_row * n_i[i]
-        
-        M_norm_l = 0
-        for i in range(2, K):
-            M_scalar_i = 0
-            sum_rel_frq_row = 0
-            for j in range(1, i - 1):
-                M_scalar_i = max(abs(i - K), abs(i-1))
-                sum_rel_frq_row = sum_rel_frq_row + rel_freq[i,j]
-            
-            M_norm_l += M_scalar_i * sum_rel_frq_row * n_i[i]
-        
-        temp = 0
-        for i in range(1, K-1):
-            for j in range(i + 1, K):
-                temp += np.abs(i - j) * n_i[i] * rel_freq[i, j]
-        upper_MWB = (1 / M_norm_u) * temp 
-        
-        temp = 0
-        for i in range(2, K):
-            for j in range(1, i - 1):
-                temp += np.abs(i - j) * n_i[i] * rel_freq[i, j]
-        lower_MWB = (1 / M_norm_l) * temp
-        
-        
-        return upper_MWB, lower_MWB
+          #Compute the matrix weighted bandwidth metric (§ 2.5.5.1);
+          #param abs_freq: transition matrix(KxK)with number of customer changes per grades;
+          #param rel_freq: transition matrix(KxK) with relative frequency of customer grade change.
+          #return: upper_MWB: upper matrix bandwidth metric, lower_MWB: lower matrix bandwidth metric.
+          abs_freq = abs_freq.as_matrix()
+          rel_freq = rel_freq.as_matrix()
+          n_i = abs_freq.sum(axis = 1)
+          K = len(abs_freq)
+          M_norm_u = 0
+          for i in range(K-1):
+               sum_rel_frq_row   = 0
+               for j in range(i, K):
+                    sum_rel_frq_row    += rel_freq[i,j]
+               M_norm_u += max(abs(i - K), abs(i)) * sum_rel_frq_row * n_i[i]
+          M_norm_l = 0
+          for i in range(1, K):
+               sum_rel_frq_row = 0
+               for j in range(i-1):
+                    sum_rel_frq_row    += rel_freq[i,j]
+               M_norm_l += max(abs(i - K), abs(i)) * sum_rel_frq_row * n_i[i]
+          temp = 0
+          for i in range(K-1):
+               for j in range(i+1, K):
+                    temp += abs(i - j) * n_i[i] * rel_freq[i, j]
+          upper_MWB = temp / M_norm_u 
+          temp = 0
+          for i in range(1, K):
+               for j in range(i-1):
+                    temp += abs(i - j) * n_i[i] * rel_freq[i, j]
+          lower_MWB = temp / M_norm_l
+          return upper_MWB, lower_MWB
 
      def stability_migration_matrix(self, abs_freq, rel_freq):
-         """
-         Compute the migration stability matrix metrics (§ 2.5.5.2);
-         To be reported to the regulator: the relative frequencies of transitions between rating grades, values
-         for the test statistic z_ij and associated p-values.
-         :param abs_freq: transition matrix (KxK) with number of customer changes per grades;
-         :param rel_freq: transition matrix (KxK) with relative frequency of customer grade change.
-         :return: z_up, z_low, zUP_pval, zDOWN_pval
-         """
-         N = abs_freq.sum(axis=1).values
-         p = rel_freq.as_matrix()
-         K = len(p)
-
-         z_up = np.zeros(p.shape)
-         for i in range(0, K - 1):
-             for j in range(i + 1, K):
-                 up = p[i, j - 1] - p[i, j]
-                 down = np.sqrt(
-                 (p[i, j] * (1 - p[i, j]) + p[i, j - 1] * (1 - p[i, j - 1]) + 2 * p[i, j] * p[i, j - 1]) / N[i])
-                 z_up[i, j] = up / down
-
-         z_low = np.zeros(p.shape)
-         for i in range(1, K):
-             for j in range(0, i):
-                 up = p[i, j + 1] - p[i, j]
-                 down = np.sqrt(
-                 (p[i, j] * (1 - p[i, j]) + p[i, j + 1] * (1 - p[i, j + 1]) + 2 * p[i, j] * p[i, j + 1]) / N[i])
-                 z_low[i, j] = up / down
-         zUP_pval= norm.cdf(z_up) # one-sided
-         zDOWN_pval = norm.cdf(z_low) # one-sided
-
-         return z_up, z_low, zUP_pval, zDOWN_pval
+          #Compute the migration stability matrix metrics (§ 2.5.5.2);
+          #param abs_freq: transition matrix (KxK) with number of customer changes per grades;
+          #param rel_freq: transition matrix (KxK) with relative frequency of customer grade change.
+          #return: z_up, z_low, zUP_pval, zDOWN_pval
+          N = abs_freq.sum(axis=1).values
+          p = rel_freq.as_matrix()
+          K = len(p)
+          z = np.zeros(p.shape)
+          for i in range(K):
+               for j in range(K):
+                    if i>j>=0:
+                         z[i, j] = (p[i, j + 1] - p[i, j]) / np.sqrt((p[i, j] * (1 - p[i, j]) + p[i, j + 1] * (1 - p[i, j + 1]) + 2 * p[i, j] * p[i, j + 1]) / N[i])
+                    else:
+                         z[i, j] = (p[i, j - 1] - p[i, j]) / np.sqrt((p[i, j] * (1 - p[i, j]) + p[i, j - 1] * (1 - p[i, j - 1]) + 2 * p[i, j] * p[i, j - 1]) / N[i])
+          z_pval    = norm.cdf(z) # one-sided
+          return z, z_pval
 
 class LGD_tests(object):
 
