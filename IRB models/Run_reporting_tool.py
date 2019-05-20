@@ -39,7 +39,7 @@ transition_matrix_freq   = matrix().matrix_prob(transition_matrix)
 # Create YYYY_rating column with a rating for each facility for each year
 upper_MWB, lower_MWB = PD_tests().MWB(transition_matrix, transition_matrix_freq)
 ### Stability of migration matrix (2.5.5.2)
-z_up, z_low, zUP_pval, zDOWN_pval = PD_tests().stability_migration_matrix(transition_matrix, transition_matrix_freq)
+z, z_pval = PD_tests().stability_migration_matrix(transition_matrix, transition_matrix_freq)
 ### Concentration in rating grades (2.5.5.3)
 # calculate coefficient of variation and the herfindahl index
 CV_init, HI_init, CV_curr, HI_curr, cr_pval = PD_tests().Herfindahl(development_set[['grade', 'Default_Binary']], validation_set[['grade', 'Default_Binary']], 'grade', 'Default_Binary', 'grade', 'count')
@@ -100,13 +100,20 @@ from export import *
 
 # Store eveything in dictionary
 PD_excel_input = {
-    "jeffrey" : jeffrey_test,
-    "AUC" : [PD_AUC_dev, PD_AUC_val, PD_s_val, PD_AUC_S, PD_AUC_p, "yes", 0, 0, 0, PD_s_dev],
-    "customer_migrations" : [upper_MWB, lower_MWB],
-    "concentration_rating_grades" : [HI_init, HI_curr, cr_pval],
-    "stability_migration_matrix" : [z_up, z_low, zUP_pval, zDOWN_pval],
+     "name"                         : "Demo PD.xlsx",
+     "start"                        : datetime.date(2007, 1, 1),
+     "end"                          : datetime.date(2015, 1, 1),
+     "jeffrey"                      : jeffrey_test,
+     "AUC_init"                     : PD_s_dev,
+     "AUC"                          : [PD_AUC_dev, PD_AUC_val, PD_s_val, PD_AUC_S, PD_AUC_p, "yes", 0, 0, 0, PD_s_dev],
+     "customer_migrations"          : [upper_MWB, lower_MWB],
+     "concentration_rating_grades"  : [HI_init, HI_curr, cr_pval, HI_init_exp],
+     "stability_migration_matrix"   : [transition_matrix_freq, z, z_pval],
+     "avg_PD"                       : development_set.groupby("grade").PD.mean().values,
+     "nb_cust"                      : development_set.grade.value_counts().sort_index().values,
+     "orgExp_Grade"                 : development_set.groupby("grade").original_exposure.sum().values,
 }
-export().PD_toExcel(development_set, PD_excel_input)
+export().PD_toExcel(PD_excel_input)
 
 LGD_excel_inputs = {
     "predictive_ability": [LGD_backtesting_ptf, LGD_backtesting_perGrade],
@@ -121,6 +128,7 @@ CCF_excel_inputs = {
     "stability_migration_matrix": [z_up, z_low, zUP_pval, zDOWN_pval],
 }
 export().CCF_toExcel(development_set, CCF_excel_inputs)
+
 
 
 
