@@ -18,9 +18,35 @@ development_set, validation_set = import_data().EY(local_dr2)
 from Validation_tests import *
 #####PD
 ####### Qualitative validation tools (2.5.2) (on hold, not a priority) ###
+
+PD_M_ex_ORFS_FLAG = "no"            # "yes" if taken into account in data/model "no" if not
+PD_M_ex_TR_FLAG = "no"              # "yes" if taken into account in data/model "no" if not
+PD_M_def_overrides_FLAG = "no"      # "yes" if taken into account in data/model "no" if not
+PD_M_def_technical_FLAG = "no"      # "yes" if taken into account in data/model "no" if not
+
 ####### Rating process statistics (2.5.2.1)
+#push to create dataset script
+PD_M = np.count_nonzero(development_set.id)
+
+PD_M_ex_ORFS = 0        #=development_set.ORFS[development_set.ORFS==1].sum()
+averagePD_M_ex_ORFS = 0 #=development_set.PD[development_set.ORFS==1].mean()
+adfPD_M_ex_ORFS = 0     #=development_set.ORFS[development_set.Default_Binary==1].sum()
+
+PD_M_ex_TR = 0          #=development_set.TR[development_set.TR==1].sum()
+averagePD_M_ex_TR = 0   #=development_set.PD[development_set.TR==1].mean()
+adfPD_M_ex_TR = 0       #=development_set.TR[development_set.Default_Binary==1].sum()
+
+PD_M_EPD = 0            #count exclusion due to rating process deficieny
+
+PD_N = PD_M - PD_M_ex_ORFS - PD_M_ex_TR - PD_M_EPD
 ####### Occurrence of overrides (2.5.2.2)
+
+PD_M_def_overrides = 0  #=development_set.override[development_set.override==1].sum()
+
 ####### Occurence of technical defaults (2.5.2.3)
+
+PD_M_def_technical = 0  #count exclusion due to technical defaults
+
 ####### Predictve ability (2.5.3)
 jeffrey_test = PD_tests().Jeffrey(development_set[['grade', 'PD', 'Default_Binary']], 'grade', 'PD', 'Default_Binary')
 ####### Discriminatory power test - AUC (2.5.4)
@@ -103,6 +129,7 @@ PD_excel_input = {
      "name"                         : "Demo PD.xlsx",
      "start"                        : datetime.date(2007, 1, 1),
      "end"                          : datetime.date(2015, 1, 1),
+     "qualitative"                  : [PD_M_ex_ORFS_FLAG, PD_M_ex_TR_FLAG, PD_M_def_overrides_FLAG, PD_M_def_technical_FLAG, PD_M, PD_M_ex_ORFS, averagePD_M_ex_ORFS, adfPD_M_ex_ORFS, PD_M_ex_TR, averagePD_M_ex_TR, adfPD_M_ex_TR, PD_M_EPD, PD_N, PD_M_def_overrides, PD_M_def_technical],
      "jeffrey"                      : jeffrey_test,
      "AUC_init"                     : PD_s_dev,
      "AUC"                          : [PD_AUC_dev, PD_AUC_val, PD_s_val, PD_AUC_S, PD_AUC_p, "yes", 0, 0, 0, PD_s_dev],
