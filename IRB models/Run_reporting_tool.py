@@ -17,6 +17,16 @@ development_set, validation_set = import_data().EY(local_dr2)
 ###Validation tests###
 from Validation_tests import *
 #####PD
+
+### Portfolio information ###
+
+[RWEA_dev, RWEA_val] = [0, 0]               #placeholder
+[EAD_dev, EAD_val] = [0, 0]                 #placeholder
+[PD_M_dev, PD_M_val] = [0, 0]               #link with 2.5.2 qualitative statistics
+[PD_K_dev, PD_K_val] = [0, 0]               #link with number of rating grades calculation further down the code
+[EV_default_dev, EV_default_val] = [0, 0]   #placeholder
+[default_dev, default_val] = [0, 0]         #link with default calculations further down the code
+
 ####### Qualitative validation tools (2.5.2) (on hold, not a priority) ###
 
 PD_M_ex_ORFS_FLAG = "no"            # "yes" if taken into account in data/model "no" if not
@@ -129,6 +139,7 @@ PD_excel_input = {
      "name"                         : "Demo PD.xlsx",
      "start"                        : datetime.date(2007, 1, 1),
      "end"                          : datetime.date(2015, 1, 1),
+     "portfolio_information"        : [RWEA_dev, RWEA_val, EAD_dev, EAD_val, PD_M_dev, PD_M_val, PD_K_dev, PD_K_val, EV_default_dev, EV_default_val, default_dev, default_val],
      "qualitative"                  : [PD_M_ex_ORFS_FLAG, PD_M_ex_TR_FLAG, PD_M_def_overrides_FLAG, PD_M_def_technical_FLAG, PD_M, PD_M_ex_ORFS, averagePD_M_ex_ORFS, adfPD_M_ex_ORFS, PD_M_ex_TR, averagePD_M_ex_TR, adfPD_M_ex_TR, PD_M_EPD, PD_N, PD_M_def_overrides, PD_M_def_technical],
      "jeffrey"                      : jeffrey_test,
      "AUC_init"                     : PD_s_dev,
