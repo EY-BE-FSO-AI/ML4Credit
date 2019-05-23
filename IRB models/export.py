@@ -92,6 +92,41 @@ class export(object):
           original_exposure_pergrade 	= pd_inputs['orgExp_Grade']
           jeffrey_test_pval_ptf 		= pd_inputs["jeffrey"].iloc[-1, -1]
           nb_customer 				= sum(nb_customer_pergrade)
+          #Portfolio Information
+          wbk20 = oxl.get_sheet_by_name("1.2")
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["RWEA_dev"], row_pos= 6, col_pos= 4)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["RWEA_val"], row_pos= 6, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["EAD_dev"], row_pos= 7, col_pos= 4)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["EAD_val"], row_pos= 7, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_dev"], row_pos= 8, col_pos= 4)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_val"], row_pos= 8, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_K_dev"], row_pos= 9, col_pos= 4)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_K_val"], row_pos= 9, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["EV_default_dev"], row_pos= 10, col_pos= 4)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["EV_default_val"], row_pos= 10, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["default_dev"], row_pos= 11, col_pos= 4)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["default_val"], row_pos= 11, col_pos= 5)
+ 
+          #Qualitative statistics
+          wbk20 = oxl.get_sheet_by_name("2.0")
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M"], row_pos= 6, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_ex_ORFS"], row_pos= 10, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_ex_TR"], row_pos= 11, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_EPD"], row_pos= 12, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_N"], row_pos= 16, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_def_overrides"], row_pos= 20, col_pos= 5)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_def_technical"], row_pos= 21, col_pos= 5)
+          
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["averagePD_M_ex_ORFS"], row_pos= 10, col_pos= 8)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["averagePD_M_ex_TR"], row_pos= 11, col_pos= 8)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["adfPD_M_ex_ORFS"], row_pos= 10, col_pos= 9)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["adfPD_M_ex_TR"], row_pos= 11, col_pos= 9)
+          
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_ex_ORFS_FLAG"], row_pos= 10, col_pos= 12)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_ex_TR_FLAG"], row_pos= 11, col_pos= 12)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_def_overrides_FLAG"], row_pos= 20, col_pos= 12)
+          self.array_toExcel(wb = wbk20, stat_array = pd_inputs["PD_M_def_technical_FLAG"], row_pos= 21, col_pos= 12)
+          
           # Predictive ability
           ## PD Back-testing using a Jeffreys test (§ 2.5.3.1) - sheet 3.0
           ### Grade Level
