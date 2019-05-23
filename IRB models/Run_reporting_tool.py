@@ -63,7 +63,7 @@ transition_matrix        = matrix().matrix_obs(development_set, 'grade_num', 'Bi
 transition_matrix_freq   = matrix().matrix_prob(transition_matrix)
 ### Customer migrations (2.5.5.1)
 # Create YYYY_rating column with a rating for each facility for each year
-upper_MWB, lower_MWB = PD_tests().MWB(transition_matrix, transition_matrix_freq)
+upper_MWB, lower_MWB = PD_tests().mwb_(transition_matrix, transition_matrix_freq)
 ### Stability of migration matrix (2.5.5.2)
 z, z_pval = PD_tests().stability_migration_matrix(transition_matrix, transition_matrix_freq)
 ### Concentration in rating grades (2.5.5.3)

@@ -126,11 +126,19 @@ class export(object):
           ## Customer Migrations (§ 2.5.5.2) - sheet 5.2
           wbk52 = oxl.get_sheet_by_name("5.2")
           c = 0
-          for j in range(len(pd_inputs["stability_migration_matrix"][0])):
-               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][0].iloc[:, j], row_pos=7, col_pos=(4 + c))      # transition probability
-               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][1][:, j], row_pos=7, col_pos=(5 + c))           # z
-               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][2][:, j], row_pos=7, col_pos=(6 + c))           # phi
+          for j in range(len(pd_inputs["stability_migration_matrix"][0].columns) - 3):
+               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][0].iloc[:, j],
+                                  row_pos=7, col_pos=(4 + c))      # transition probability
+               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][1][:, j],
+                                  row_pos=7, col_pos=(5 + c))      # z
+               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][2][:, j], row_pos=7,
+                                  col_pos=(6 + c))           # phi
                c += 3
+
+          self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][0].iloc[:,-1:], row_pos=7,
+                             col_pos=124) #freq of dflt customers
+          self.df_toExcel(wb=wbk52, df=pd_inputs["stability_migration_matrix"][0].iloc[:,-3:], row_pos=7, col_pos=124)
+
           # Save file
           oxl.save( file_name )
           oxl.close()
