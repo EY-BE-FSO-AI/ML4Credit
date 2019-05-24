@@ -27,7 +27,7 @@ class general(object):
           return out
 
 class matrix(object):
-     
+
      def check_square(self, M):
           #Check whether matrix MemoryError is square
           result = True if M.shape[0] == M.shape[1] else False
@@ -53,10 +53,18 @@ class matrix(object):
           #x: variable used to create the rows of the matrix
           #y: variable used to create the columns of the matrix
           #z: variable used to calculate the sum per cell of the matrix
-          matrix  = data[data[z] == 0].groupby([x, y]).size().unstack(fill_value=0)
-          matrix  = self.square(matrix)
+          if y == 'Bin_PD':
+              matrix = data[data[z]== 0].groupby([x, y]).size().unstack(fill_value=0)
+              matrix["dflt"] = data[data[z]== 1].groupby([x]).size()
+              matrix["hiii"] = len(matrix.index) * [0] # Placeholder for pt h.iii in 2.5.1
+              matrix["hiv"] = len(matrix.index) * [0]  # Placeholder for pt h.iv in 2.5.1
+              if matrix.sum(axis=1).sum() != len(data):
+                  raise ValueError("Transition Matrix customer number different from total customer number.")
+          else:
+              matrix  = data[data[z] == 0].groupby([x, y]).size().unstack(fill_value=0)
+              matrix  = self.square(matrix)
           return matrix
-          
+
      def matrix_prob(self, matrix):
           #matrix: the returned value of the matrix_obs function
           matrix_ = matrix.div(matrix.sum(axis=1), axis=0)
@@ -153,29 +161,52 @@ class PD_tests(object):
           #param abs_freq: transition matrix(KxK)with number of customer changes per grades;
           #param rel_freq: transition matrix(KxK) with relative frequency of customer grade change.
           #return: upper_MWB: upper matrix bandwidth metric, lower_MWB: lower matrix bandwidth metric.
-          abs_freq = abs_freq.as_matrix()
-          rel_freq = rel_freq.as_matrix()
+          abs_freq = abs_freq.as_matrix()[:, :-3]
+          rel_freq = rel_freq.as_matrix()[:, :-3]
           n_i      = abs_freq.sum(axis = 1)
           K        = len(abs_freq)
           M_norm_u = 0
-          temp     = 0
+          temp_up  = 0
           for i in range(K-1):
                sum_rel_frq_row   = 0
-               for j in range(i, K):
-                    sum_rel_frq_row    += rel_freq[i,j]
-                    temp               += abs(i - j) * n_i[i] * rel_freq[i, j]
+               for j in range(i+1, K):
+                    sum_rel_frq_row       += rel_freq[i,j]
+                    temp_up               += abs(i - j) * n_i[i] * rel_freq[i, j]
                M_norm_u += max(abs(i + 1 - K), abs(i)) * sum_rel_frq_row * n_i[i]
           M_norm_l = 0
-          temp     = 0
+          temp_low     = 0
           for i in range(1, K):
                sum_rel_frq_row = 0
                for j in range(i-1):
-                    sum_rel_frq_row    += rel_freq[i,j]
-                    temp               += abs(i - j) * n_i[i] * rel_freq[i, j]
+                    sum_rel_frq_row        += rel_freq[i,j]
+                    temp_low               += abs(i - j) * n_i[i] * rel_freq[i, j]
                M_norm_l += max(abs(i + 1 - K), abs(i)) * sum_rel_frq_row * n_i[i]
-          upper_MWB = temp / M_norm_u 
-          lower_MWB = temp / M_norm_l
+          upper_MWB = temp_up / M_norm_u
+          lower_MWB = temp_low / M_norm_l
           return upper_MWB, lower_MWB
+
+     def mwb_(self, transition_matrix, transition_matrix_freq):
+         v = np.arange(0, len(transition_matrix_freq))
+         k = len(transition_matrix) - 1
+         n_i = transition_matrix.sum(axis=1)
+         dflt_freq = transition_matrix_freq.iloc[:, -3:].sum(axis=1)
+         temp_up = []
+         temp_down = []
+         for i in range(len(transition_matrix_freq)):
+             temp_up.append((v < i) * abs(v - i) * n_i * transition_matrix_freq.iloc[:i, i])
+             temp_down.append((v > i) * abs(v - i) * n_i * transition_matrix_freq.iloc[i:, i])
+
+         mwb_up = pd.concat(temp_up, axis=1).fillna(0).sum(axis=0)
+         mwb_down = pd.concat(temp_down, axis=1).fillna(0).sum(axis=0)
+
+         denom = 0
+         for i in range(len(v)):
+             if (abs(v[i] - k) > abs(v[i])):
+                 denom += abs(v[i] - k) * n_i.iloc[i] * (1 - dflt_freq.iloc[i])
+             else:
+                 denom += abs(v[i]) * n_i.iloc[i] * (1 - dflt_freq.iloc[i])
+
+         return np.sum(mwb_up) / denom, np.sum(mwb_down) / denom
 
      def stability_migration_matrix(self, abs_freq, rel_freq):
           #Compute the migration stability matrix metrics (§ 2.5.5.2);

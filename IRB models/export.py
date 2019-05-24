@@ -60,6 +60,18 @@ class export(object):
                 i += 1
         return None
 
+    def element_toExcel(self, wb, element, row_pos, col_pos):
+        """
+
+        :param wb:
+        :param element:
+        :param row_pos:
+        :param col_pos:
+        :return:
+        """
+        wb.cell(row=row_pos, column=col_pos).value = element
+        return None
+
     def df_toExcel(self, wb, df, row_pos, col_pos):
         """
         As it says
@@ -92,6 +104,41 @@ class export(object):
           original_exposure_pergrade 	= pd_inputs['orgExp_Grade']
           jeffrey_test_pval_ptf 		= pd_inputs["jeffrey"].iloc[-1, -1]
           nb_customer 				= sum(nb_customer_pergrade)
+          #Portfolio Information
+          wbk12 = oxl.get_sheet_by_name("1.2")
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["RWEA_dev"], row_pos= 6, col_pos= 4)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["RWEA_val"], row_pos= 6, col_pos= 5)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["EAD_dev"], row_pos= 7, col_pos= 4)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["EAD_val"], row_pos= 7, col_pos= 5)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["PD_M_dev"], row_pos= 8, col_pos= 4)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["PD_M_val"], row_pos= 8, col_pos= 5)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["PD_K_dev"], row_pos= 9, col_pos= 4)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["PD_K_val"], row_pos= 9, col_pos= 5)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["EV_default_dev"], row_pos= 10, col_pos= 4)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["EV_default_val"], row_pos= 10, col_pos= 5)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["default_dev"], row_pos= 11, col_pos= 4)
+          self.element_toExcel(wb = wbk12, element = pd_inputs["portfolio_information"]["default_val"], row_pos= 11, col_pos= 5)
+ 
+          #Qualitative statistics
+          wbk20 = oxl.get_sheet_by_name("2.0")
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_M"], row_pos= 6, col_pos= 5)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_M_ex_ORFS"], row_pos= 10, col_pos= 5)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_M_ex_TR"], row_pos= 11, col_pos= 5)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_M_EPD"], row_pos= 12, col_pos= 5)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_N"], row_pos= 16, col_pos= 5)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_M_def_overrides"], row_pos= 20, col_pos= 5)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_M_def_technical"], row_pos= 21, col_pos= 5)
+
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["averagePD_M_ex_ORFS"], row_pos= 10, col_pos= 8)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["averagePD_M_ex_TR"], row_pos= 11, col_pos= 8)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["adfPD_M_ex_ORFS"], row_pos= 10, col_pos= 9)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["adfPD_M_ex_TR"], row_pos= 11, col_pos= 9)
+
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_M_ex_ORFS_FLAG"], row_pos= 10, col_pos= 12)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_M_ex_TR_FLAG"], row_pos= 11, col_pos= 12)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_M_def_overrides_FLAG"], row_pos= 20, col_pos= 12)
+          self.element_toExcel(wb = wbk20, element = pd_inputs["qualitative"]["PD_M_def_technical_FLAG"], row_pos= 21, col_pos= 12)
+          
           # Predictive ability
           ## PD Back-testing using a Jeffreys test (§ 2.5.3.1) - sheet 3.0
           ### Grade Level
@@ -126,11 +173,19 @@ class export(object):
           ## Customer Migrations (§ 2.5.5.2) - sheet 5.2
           wbk52 = oxl.get_sheet_by_name("5.2")
           c = 0
-          for j in range(len(pd_inputs["stability_migration_matrix"][0])):
-               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][0].iloc[:, j], row_pos=7, col_pos=(4 + c))      # transition probability
-               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][1][:, j], row_pos=7, col_pos=(5 + c))           # z
-               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][2][:, j], row_pos=7, col_pos=(6 + c))           # phi
+          for j in range(len(pd_inputs["stability_migration_matrix"][0].columns) - 3):
+               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][0].iloc[:, j],
+                                  row_pos=7, col_pos=(4 + c))      # transition probability
+               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][1][:, j],
+                                  row_pos=7, col_pos=(5 + c))      # z
+               self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][2][:, j], row_pos=7,
+                                  col_pos=(6 + c))           # phi
                c += 3
+
+          self.array_toExcel(wb=wbk52, stat_array = pd_inputs["stability_migration_matrix"][0].iloc[:,-1:], row_pos=7,
+                             col_pos=124) #freq of dflt customers
+          self.df_toExcel(wb=wbk52, df=pd_inputs["stability_migration_matrix"][0].iloc[:,-3:], row_pos=7, col_pos=124)
+
           # Save file
           oxl.save( file_name )
           oxl.close()
