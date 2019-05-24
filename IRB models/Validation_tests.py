@@ -150,42 +150,17 @@ class PD_tests(object):
           #z1 aggregation variable (x or exposure)
           #z2 aggregation function (count or sum
           df_agg           = df.groupby(x).agg({z1 : z2})
-          df_agg['R_i']    = df_agg[z1] / df_agg.sum()
+          df_agg['R_i']    = df_agg / df_agg.sum()
           df_agg['CV_cb']  = (df_agg['R_i'] - 1 / K) ** 2
           CV               = (K * df_agg['CV_cb'].sum())**(0.5)
           HI               = 1 + math.log((CV**2 + 1) / K) / math.log(K)
           return CV, HI
 
-     def MWB(self, abs_freq, rel_freq):
-          #Compute the matrix weighted bandwidth metric (§ 2.5.5.1);
-          #param abs_freq: transition matrix(KxK)with number of customer changes per grades;
-          #param rel_freq: transition matrix(KxK) with relative frequency of customer grade change.
-          #return: upper_MWB: upper matrix bandwidth metric, lower_MWB: lower matrix bandwidth metric.
-          abs_freq = abs_freq.as_matrix()[:, :-3]
-          rel_freq = rel_freq.as_matrix()[:, :-3]
-          n_i      = abs_freq.sum(axis = 1)
-          K        = len(abs_freq)
-          M_norm_u = 0
-          temp_up  = 0
-          for i in range(K-1):
-               sum_rel_frq_row   = 0
-               for j in range(i+1, K):
-                    sum_rel_frq_row       += rel_freq[i,j]
-                    temp_up               += abs(i - j) * n_i[i] * rel_freq[i, j]
-               M_norm_u += max(abs(i + 1 - K), abs(i)) * sum_rel_frq_row * n_i[i]
-          M_norm_l = 0
-          temp_low     = 0
-          for i in range(1, K):
-               sum_rel_frq_row = 0
-               for j in range(i-1):
-                    sum_rel_frq_row        += rel_freq[i,j]
-                    temp_low               += abs(i - j) * n_i[i] * rel_freq[i, j]
-               M_norm_l += max(abs(i + 1 - K), abs(i)) * sum_rel_frq_row * n_i[i]
-          upper_MWB = temp_up / M_norm_u
-          lower_MWB = temp_low / M_norm_l
-          return upper_MWB, lower_MWB
-
-     def mwb_(self, transition_matrix, transition_matrix_freq):
+     def MWB(self, transition_matrix, transition_matrix_freq):
+         # Compute the matrix weighted bandwidth metric (§ 2.5.5.1);
+         # param abs_freq: transition matrix(KxK)with number of customer changes per grades;
+         # param rel_freq: transition matrix(KxK) with relative frequency of customer grade change.
+         # return: upper_MWB: upper matrix bandwidth metric, lower_MWB: lower matrix bandwidth metric.
          v = np.arange(0, len(transition_matrix_freq))
          k = len(transition_matrix) - 1
          n_i = transition_matrix.sum(axis=1)

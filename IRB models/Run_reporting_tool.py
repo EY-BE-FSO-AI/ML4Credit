@@ -83,7 +83,6 @@ print('PD extra tests calculation execution time: %.3fs' % (elapsed_time))
 start_time = time.time()
 transition_matrix        = matrix().matrix_obs(development_set, 'grade_num', 'Bin_PD', 'Default_Binary')
 transition_matrix_freq   = matrix().matrix_prob(transition_matrix)
-elapsed_time = time.time() - start_time
 ### Customer migrations (2.5.5.1)
 # Create YYYY_rating column with a rating for each facility for each year
 upper_MWB, lower_MWB = PD_tests().mwb_(transition_matrix, transition_matrix_freq)
@@ -91,8 +90,9 @@ upper_MWB, lower_MWB = PD_tests().mwb_(transition_matrix, transition_matrix_freq
 z, z_pval = PD_tests().stability_migration_matrix(transition_matrix, transition_matrix_freq)
 ### Concentration in rating grades (2.5.5.3)
 # calculate coefficient of variation and the herfindahl index
-CV_init, HI_init, CV_curr, HI_curr, cr_pval = PD_tests().Herfindahl(development_set[['grade', 'Default_Binary']], validation_set[['grade', 'Default_Binary']], 'grade', 'Default_Binary', 'grade', 'count')
-CV_init_exp, HI_init_exp, CV_curr_exp, HI_curr_exp, cr_pval_exp = PD_tests().Herfindahl(development_set[['grade', 'Default_Binary', 'original_exposure']], validation_set[['grade', 'Default_Binary', 'original_exposure']], 'grade', 'Default_Binary', 'original_exposure', 'sum')
+CV_init, HI_init, CV_curr, HI_curr, cr_pval = PD_tests().Herfindahl(validation_set[['grade', 'Default_Binary']], development_set[['grade', 'Default_Binary']], 'grade', 'Default_Binary', 'grade', 'count')
+CV_init_exp, HI_init_exp, CV_curr_exp, HI_curr_exp, cr_pval_exp = PD_tests().Herfindahl(validation_set[['grade', 'Default_Binary', 'original_exposure']], development_set[['grade', 'Default_Binary', 'original_exposure']],  'grade', 'Default_Binary', 'original_exposure', 'sum')
+elapsed_time = time.time() - start_time
 print('PD transition matrix stability test and rating grade concentration execution time: %.3fs' % (elapsed_time))
 
 #####LGD
@@ -167,7 +167,7 @@ PD_excel_input = {
      "AUC_init"                     : PD_s_dev,
      "AUC"                          : [PD_AUC_dev, PD_AUC_val, PD_s_val, PD_AUC_S, PD_AUC_p, "yes", 0, 0, 0, PD_s_dev],
      "customer_migrations"          : [upper_MWB, lower_MWB],
-     "concentration_rating_grades"  : [HI_init, HI_curr, cr_pval, HI_init_exp],
+     "concentration_rating_grades"  : [HI_init, HI_curr, cr_pval, HI_curr_exp],
      "stability_migration_matrix"   : [transition_matrix_freq, z, z_pval],
      "avg_PD"                       : development_set.groupby("grade").PD.mean().values,
      "nb_cust"                      : development_set.grade.value_counts().sort_index().values,
