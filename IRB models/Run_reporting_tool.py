@@ -16,7 +16,7 @@ sys.path.append(local_dr)
 ###Import data set###
 from create_data_set import *
 start_time = time.time()
-development_set, validation_set = import_data().EY(local_dr2)
+development_set, validation_set = import_data().EY_demo(local_dr2)
 elapsed_time = time.time() - start_time
 print('Data creation execution time: %.3fs' % (elapsed_time))
 ###Validation tests###
@@ -25,12 +25,12 @@ from Validation_tests import *
 
 ### Portfolio information ###
 
-[RWEA_dev, RWEA_val] = [0, 0]               #placeholder
-[EAD_dev, EAD_val] = [0, 0]                 #placeholder
-[PD_M_dev, PD_M_val] = [0, 0]               #link with 2.5.2 qualitative statistics
-[PD_K_dev, PD_K_val] = [len(development_set.grade_num.unique()), len(validation_set.grade_num.unique())]               #link with number of rating grades calculation further down the code
-[EV_default_dev, EV_default_val] = [0, 0]   #placeholder
-[default_dev, default_val] = [0, 0]         #link with default calculations further down the code
+[RWEA_beg,    RWEA]           = [validation_set.RWEA_beg.sum(), validation_set.RWEA.sum()]                         #placeholder
+[EAD_beg,     EAD]            = [validation_set.EAD_beg.sum(), validation_set.EAD.sum()]                           #placeholder
+[PD_M_beg,    PD_M]           = [validation_set.PD_beg.mean(), validation_set.PD.mean()]                           #link with 2.5.2 qualitative statistics
+[PD_K_beg,    PD_K]           = [len(development_set.grade_num.unique()), len(validation_set.grade_num.unique())]  #link with number of rating grades calculation further down the code
+[Exp_def_beg, Exp_def_end]    = [validation_set.EAD_beg.sum(), validation_set.EAD.sum()]                           #placeholder
+[def_beg,     def_end]        = [validation_set.Default_Binary_beg.sum(), validation_set.Default_Binary_beg.sum()] #link with default calculations further down the code
 
 ####### Qualitative validation tools (2.5.2) (on hold, not a priority) ###
 
@@ -153,10 +153,10 @@ PD_excel_input = {
      "name"                         : "Demo PD.xlsx",
      "start"                        : datetime.date(2007, 1, 1),
      "end"                          : datetime.date(2015, 1, 1),
-     "portfolio_information"        : {"RWEA_dev" : RWEA_dev, "RWEA_val":RWEA_val,"EAD_dev": EAD_dev,"EAD_val": EAD_val,
-                                       "PD_M_dev": PD_M_dev,"PD_M_val": PD_M_val,"PD_K_dev": PD_K_dev, "PD_K_val": PD_K_val,
-                                       "EV_default_dev":EV_default_dev, "EV_default_val":EV_default_val,
-                                       "default_dev":default_dev, "default_val":default_val},
+     "portfolio_information"        : {"RWEA_beg" : RWEA_beg, "RWEA":RWEA,"EAD_beg": EAD_beg,"EAD": EAD,
+                                       "PD_M_beg": PD_M_beg,"PD_M": PD_M,"PD_K_beg": PD_K, "PD_K": PD_K,
+                                       "Exp_def_beg":Exp_def_beg, "Exp_def_end":Exp_def_end,
+                                       "def_beg":def_beg, "def_end":def_end},
      "qualitative"                  : {"PD_M_ex_ORFS_FLAG": PD_M_ex_ORFS_FLAG, "PD_M_ex_TR_FLAG": PD_M_ex_TR_FLAG,
                                        "PD_M_def_overrides_FLAG":PD_M_def_overrides_FLAG, "PD_M_def_technical_FLAG":PD_M_def_technical_FLAG,
                                        "PD_M":PD_M, "PD_M_ex_ORFS":PD_M_ex_ORFS, "averagePD_M_ex_ORFS":averagePD_M_ex_ORFS,
