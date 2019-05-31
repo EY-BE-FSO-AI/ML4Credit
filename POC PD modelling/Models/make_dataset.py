@@ -26,6 +26,10 @@ if __name__ == '__main__':
     linesToRead = None
     linesToRead = 300000
 
+
+
+    
+
     aquisition_frame = pd.read_csv('C:/Users/bebxadvberb/Documents/AI/Trusted AI/Acquisition_2007Q4.txt',
                                    sep='|', names=col_acq, nrows=linesToRead)
     performance_frame = pd.read_csv('C:/Users/bebxadvberb/Documents/AI/Trusted AI/Performance_2007Q4.txt',
