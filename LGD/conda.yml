@@ -1,0 +1,16 @@
+name: lgd-env
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.7
+  - numpy
+  - pandas
+  - seaborn
+  - scikit-learn
+  - catboost
+  - scipy
+  - pip
+  - pip:
+    - interpret
