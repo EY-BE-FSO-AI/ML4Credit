@@ -22,3 +22,16 @@ conda env update --file conda.yml
 ``` 
 conda activate lgd-env
 ``` 
+
+## How to deactive LGD environment
+
+``` 
+conda deactivate
+``` 
+
+## How to run a python file from cmd terminal in the LGD environment from your local repository, e.g. C:\Users\bebxadvboey\Documents\Python\GitHub\ML4Credit\LGD
+
+``` 
+cd local_directory
+src\data\make_dataset.py
+``` 
