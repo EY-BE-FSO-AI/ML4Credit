@@ -48,6 +48,7 @@ import seaborn as sns
 import scipy.stats.stats as stats
 import statsmodels.api as  sm
 import pandas.core.algorithms as algos
+import datetime as dt
 
 
 #Import datasets, select features and define the default-flag collumn.
@@ -71,76 +72,128 @@ extended_selec_per = col_per
 
 col_per_subset =  extended_selec_per 
     
-def read_file(name='Data/Performance_HARP.txt', ref_year=['2016','2017','2018'], lines_to_read=None):
+def read_file(file_name, ref_year, lines_to_read=None):
     """
-    Read file in fc to avoid memory issue
+    Read file in function to avoid memory issues
+    + Add lagged payment variables
+    Parameters
+    ----------
+    file_name: Path name of the file;
+    ref_year: Specify the list of years to be read;
+    lines_to_read: Specify the number of rows of the dataset to be read.
+
+    Returns
+    -------
+    Raw performance dataframe
     """
-    df = pd.read_csv(name, sep='|', names=col_per, dtype=perf_type_map, usecols=col_per_subset, index_col=False,
+
+    df = pd.read_csv(file_name, sep='|', names=col_per, dtype=perf_type_map, usecols=col_per_subset, index_col=False,
                      nrows=lines_to_read)
-    df = df[df.MonthRep.str.contains('|'.join(ref_year))]
+    if ref_year != None:
+        df = df[df.MonthRep.str.contains('|'.join(ref_year))]
+    # Add lagged deliquincy payment value based on CLDS
+    df['CLDS'] = df.CLDS.replace('X', '1').astype('float')
+    df.loc[df.CLDS == 0.0, 'Arrears'] = 0
+    df.loc[df.CLDS != 0.0, 'Arrears'] = 1
+    df['Arrears_3m'] = df['Arrears'].rolling(min_periods=3, window=3).apply(
+        lambda x: x.sum() if x.sum() < 3 else 0, raw=True).astype('category')
+    df['Arrears_6m'] = df['Arrears'].rolling(min_periods=6, window=6).apply(
+        lambda x: x.sum() if x.sum() < 6 else 0, raw=True).astype('category')
+    df['Arrears_9m'] = df['Arrears'].rolling(min_periods=9, window=9).apply(
+        lambda x: x.sum() if x.sum() < 9 else 0, raw=True).astype('category')
+    df['Arrears_12m'] = df['Arrears'].rolling(min_periods=12, window=12).apply(
+        lambda x: x.sum() if x.sum() < 12 else 0, raw=True).astype('category')
+
     return df
 
-performance_frame = read_file(  ) # 3e7: around half of the dataset rows
 
-# Add lagged deliquincy payment value based on CLDS
-performance_frame['CLDS'] = performance_frame.CLDS.replace('X', '1')
-performance_frame.loc[performance_frame.CLDS =='0', 'Arrears'] = 0
-performance_frame.loc[performance_frame.CLDS != '0', 'Arrears'] = 1
-performance_frame['Arrears_3m'] = performance_frame['Arrears'].rolling(min_periods=3, window=3).apply(lambda x: x.sum() if x.sum()<3 else 0, raw=True).astype('category')
-performance_frame['Arrears_6m'] = performance_frame['Arrears'].rolling(min_periods=6, window=6).apply(lambda x: x.sum() if x.sum()<6 else 0, raw=True).astype('category')
-performance_frame['Arrears_9m'] = performance_frame['Arrears'].rolling(min_periods=9, window=9).apply(lambda x: x.sum() if x.sum()<9 else 0, raw=True).astype('category')
-performance_frame['Arrears_12m'] = performance_frame['Arrears'].rolling(min_periods=12, window=12).apply(lambda x: x.sum() if x.sum()<12 else 0, raw=True).astype('category')
-
-
-#Fix the IDs in the observation set by fixing their reporting date AND requiring that the files are healthy.
-observation_frame = performance_frame[((performance_frame.MonthRep == '12/01/2016') |
-                                       (performance_frame.MonthRep == '03/01/2017') |
-                                       (performance_frame.MonthRep == '06/01/2017') |
-                                       (performance_frame.MonthRep == '09/01/2017') |
-                                       (performance_frame.MonthRep == '12/01/2017'))
-                                      &
-                                (   (performance_frame.CLDS == '0') |
-                                    (performance_frame.CLDS == '1') |
-                                    (performance_frame.CLDS == '2') |
-                                    (performance_frame.CLDS == 'X')
-                                )
-                                ]
-obs_ids = observation_frame.LoanID
-
-# #Load only the observation IDs in the performance frame initially.
-pf = performance_frame[performance_frame.LoanID.isin(obs_ids)]
-
-# Keep only the reporting dates that are in our performance period (MM/DD/YYYY format). """
-pf_obs = pf[
-    (pf.MonthRep == '01/01/2018') |
-    (pf.MonthRep == '02/01/2018') |
-    (pf.MonthRep == '03/01/2018') |
-    (pf.MonthRep == '04/01/2018') |
-    (pf.MonthRep == '05/01/2018') |
-    (pf.MonthRep == '06/01/2018') |
-    (pf.MonthRep == '07/01/2018') |
-    (pf.MonthRep == '08/01/2018') |
-    (pf.MonthRep == '09/01/2018') |
-    (pf.MonthRep == '10/01/2018') |
-    (pf.MonthRep == '11/01/2018') |
-    (pf.MonthRep == '12/01/2018')
+def create_12mDefault(date, perf_df):
+    """
+    Create the 12 month forward looking default flag.
+    Parameters
+    ----------
+    date: Snapshot date
+    perf_df: Performance dataframe
+    Returns
+    -------
+    Raw observation dataframe
+    """
+    cur_date = dt.datetime.strptime(date, '%m/%d/%Y').date()
+    # Fix the IDs in the observation set by fixing their reporting date AND requiring that the files are healthy.
+    obs_df = perf_df[(perf_df.MonthRep == date)
+                     &
+                     ((perf_df.CLDS == 0.0) |
+                     (perf_df.CLDS == 1.0) |
+                     (perf_df.CLDS == 2.0)
+                      )
     ]
+    obs_ids = obs_df.LoanID
+    # Load only the observation IDs in the performance frame initially.
+    pf = perf_df[perf_df.LoanID.isin(obs_ids)]
 
-# Find the LoanIDs of those loans where a default appears in our performance period.
-pf_obs_defaults = pf_obs[
-    (pf_obs.CLDS != '0') &
-    (pf_obs.CLDS != '1') &
-    (pf_obs.CLDS != '2') &
-    (pf_obs.CLDS != 'X')
-    ].index
+    # Create the 12 month forward looking list of dates
+    date_list = []
+    for i in np.arange(0,12):
+        if cur_date.month == 12:
+            month = 1
+            year = cur_date.year + 1
+        else:
+            month = cur_date.month + 1
+            year = cur_date.year
+        next_date = dt.datetime(year , month, cur_date.day)
+        date_list.append(next_date.strftime('%m/%d/%Y'))
+        cur_date = next_date
 
-# pf_obs_defaults.drop_duplicates(keep='last', inplace=True)
+    # Find the LoanIDs of those loans where a default appears in our 12 month forward looking period.
+    pf_obs = perf_df[perf_df.MonthRep.isin(date_list)]
+    pf_obs_defaults = pf_obs[
+        (pf_obs.CLDS != 0.0) &
+        (pf_obs.CLDS != 1.0) &
+        (pf_obs.CLDS != 2.0)
+        ].LoanID
 
-df = pf_obs
-df['Default'] = 0
-df.loc[pf_obs_defaults, 'Default'] = 1
-# Add the 12m default flag to the observation frame
-observation_frame['Default'] = observation_frame.LoanID.isin(df[df.Default== 1].LoanID.drop_duplicates()).astype('int')
+    pf_obs_defaults = pf_obs_defaults.drop_duplicates(keep='last').values
+    df = obs_df
+    df['Default'] = 0
+    df.loc[df['LoanID'].isin(pf_obs_defaults), 'Default'] = 1
+
+    return df
+
+def remove_default_dupl(observ_df):
+    """
+    Remove observations with more than one default in observation dataframe
+    Parameters
+    ----------
+    observ_df: observation dataframe
+
+    Returns
+    -------
+    final observation dataframe
+    """
+    # Check in observation frame for Loans with more than one defaults per loan ID:
+    dft_per_loan = observ_df.groupby('LoanID').Default.sum()
+    # List of Loan IDs with more than 1 default:
+    dft_per_loan_ids = dft_per_loan[dft_per_loan > 1].index.tolist()
+    # Dataframe of loans with more than 1 default:
+    dft_per_loan_df = observ_df[observ_df.LoanID.isin(dft_per_loan_ids)]
+    # Remove Loans with default flag=0 (cured or not yet in default) and keep 'first' appearing default:
+    dft_per_loan_df = dft_per_loan_df[dft_per_loan_df.Default > 0].drop_duplicates(subset='LoanID', keep='first')
+    # Healthy dataframe without any loans with more than 1 default
+    healthy_frame = observ_df.drop(observ_df[observ_df.LoanID.isin(dft_per_loan_ids)].index)
+    # Concat healthy frame and frame containing the filtered loans with
+    observs_df_new = pd.concat([healthy_frame, dft_per_loan_df])
+
+    return observs_df_new
+
+
+# Read the file Performance_HARP.txt: http://www.fanniemae.com/portal/funding-the-market/data/loan-performance-data.html
+performance_frame = read_file(file_name='Data/Performance_HARP.txt', ref_year=['2016','2017','2018'])
+# Define your snapshot dates for your observation frame:
+date_list = ['12/01/2016', '03/01/2017', '06/01/2017', '09/01/2017', '12/01/2017']
+observation_frame = pd.concat([create_12mDefault(d, performance_frame) for d in date_list])
+# Remove observations with several defaults:
+observation_frame = remove_default_dupl(observation_frame)
+
 
 
 '''
@@ -153,8 +206,8 @@ observation_frame['maturity_year'] = observation_frame.MaturityDate.apply(lambda
 observation_frame = observation_frame.drop(labels=['MaturityDate'], axis=1)
 
 # Add coarsed CLDS (<3)
-observation_frame['CLDS_coarse'] = observation_frame.CLDS.apply(
-        lambda x: x if x == 'X' else 'NAN' if x == 'NAN' else '>3' if int(x) >= 3 else x).astype('category')
+#observation_frame['CLDS_coarse'] = observation_frame.CLDS.apply(lambda x: x if x == 'X' else 'NAN' if x == 'NAN' else '>3' if int(x) >= 3 else x).astype('category')
+observation_frame.CLDS = observation_frame.CLDS.astype('category')
 
 missing_tolerance = 20 #percent
 col_del = observation_frame.columns[observation_frame.isnull().sum() * 100 / len(observation_frame) > missing_tolerance]
