@@ -49,6 +49,7 @@ import scipy.stats.stats as stats
 import statsmodels.api as  sm
 import pandas.core.algorithms as algos
 import datetime as dt
+from sklearn.model_selection import train_test_split
 
 
 #Import datasets, select features and define the default-flag collumn.
@@ -185,14 +186,43 @@ def remove_default_dupl(observ_df):
 
     return observs_df_new
 
+def select_sample(observ_df):
+    '''
+    Select randomly 1/8 of the accounts from each of the 8 quarterly snapshot; an account should appear only once.
+    This way, the final sample will have an even mix of each quarter and will be equivalent size of the portfolio
+    on average over the 2 years.
+    Parameters
+    ----------
+    observ_df
+
+    Returns
+    -------
+
+    '''
+    snapshots = observ_df.MonthRep.unique()
+    i = int(observ_df.shape[0] / len(snapshots) / 8)
+    l = []
+    for d in snapshots:
+        l.append(observ_df[observ_df.MonthRep == d].sample(n=i, replace=False, random_state=1))
+    df = pd.concat(l)
+    return df
+
+def traintest_split(observation_frame, testsize=0.2):
+    X = observation_frame.drop('Default', axis=1)
+    Y = observation_frame.Default
+    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=testsize, random_state=1)
+    return X_train, X_test, y_train, y_test
 
 # Read the file Performance_HARP.txt: http://www.fanniemae.com/portal/funding-the-market/data/loan-performance-data.html
 performance_frame = read_file(file_name='Data/Performance_HARP.txt', ref_year=['2016','2017','2018'])
 # Define your snapshot dates for your observation frame:
-date_list = ['12/01/2016', '03/01/2017', '06/01/2017', '09/01/2017', '12/01/2017']
-observation_frame = pd.concat([create_12mDefault(d, performance_frame) for d in date_list])
+date_list = ['03/01/2016', '06/01/2016', '09/01/2016', '12/01/2016', '03/01/2017', '06/01/2017', '09/01/2017', '12/01/2017']
+pre_frame = pd.concat([create_12mDefault(d, performance_frame) for d in date_list])
 # Remove observations with several defaults:
-observation_frame = remove_default_dupl(observation_frame)
+pre_frame = remove_default_dupl(pre_frame)
+# Random Sample
+pre_frame = select_sample(pre_frame)
+observation_frame = pre_frame
 
 
 
