@@ -207,6 +207,39 @@ def select_sample(observ_df):
     df = pd.concat(l)
     return df
 
+def sample_wo_duplicates(observ_df):
+    """
+    Sampling without duplicates.
+    Parameters
+    ----------
+    observ_df: the complete observation frame
+
+    Returns
+    -------
+    Sampled frame
+    """
+    snapshots = pre_frame.MonthRep.unique()
+    snapshots_dates = [dt.datetime.strptime(d, '%m/%d/%Y').date() for d in snapshots]
+    sample_list = []
+    loanids_list = []
+    for d in sorted(snapshots_dates)[::-1]:  # Backward looking
+        snap_df = pre_frame[pre_frame.MonthRep == d.strftime("%m/%d/%Y")]
+        i = int(snap_df.shape[0] / len(snapshots))
+        #print('value of 1/8 of the snapshote dataframe= ', i)
+        j = len(snap_df)
+        # Drop duplicates:
+        if loanids_list != None:
+            #print('Number of duplicates to kick out= ', snap_df.LoanID.isin(loanids_list).sum())
+            snap_df = snap_df[~snap_df.LoanID.isin(loanids_list)]
+            #print('Check', j - len(snap_df))
+        # Sample
+        sampled_df = snap_df.sample(n=i, replace=False, random_state=1)
+        # print('Length of sampled df=', len(sampled_df))
+        sample_list.append(sampled_df)
+        loanids_list.extend(sampled_df.LoanID.unique().tolist())
+    agg_sample_df = pd.concat(sample_list)
+    return agg_sample_df
+
 def traintest_split(observation_frame, testsize=0.2):
     X = observation_frame.drop('Default', axis=1)
     Y = observation_frame.Default
@@ -224,6 +257,7 @@ if __name__ == "__main__":
     # Remove observations with several defaults:
     pre_frame = remove_default_dupl(pre_frame)
     # Sampling
-    observation_frame = select_sample(pre_frame)
+    observation_frame = sample_wo_duplicates(pre_frame)
+    # observation_frame = select_sample(pre_frame)
     # Train/test split
     X_train, X_test, y_train, y_test = traintest_split(observation_frame)
