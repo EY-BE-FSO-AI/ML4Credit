@@ -207,6 +207,42 @@ def select_sample(observ_df):
     df = pd.concat(l)
     return df
 
+
+
+def sample_wo_duplicates(observ_df):
+    """
+    Sampling without duplicates.
+    Parameters
+    ----------
+    observ_df: the complete observation frame
+
+    Returns
+    -------
+    Sampled frame
+    """
+    snapshots = pre_frame.MonthRep.unique()
+    snapshots_dates = [dt.datetime.strptime(d, '%m/%d/%Y').date() for d in snapshots]
+    sample_list = []
+    loanids_list = []
+    for d in sorted(snapshots_dates)[::-1]:  # Backward looking
+        snap_df = pre_frame[pre_frame.MonthRep == d.strftime("%m/%d/%Y")]
+        i = int(snap_df.shape[0] / len(snapshots))
+        #print('value of 1/8 of the snapshote dataframe= ', i)
+        j = len(snap_df)
+        # Drop duplicates:
+        if loanids_list != None:
+            #print('Number of duplicates to kick out= ', snap_df.LoanID.isin(loanids_list).sum())
+            snap_df = snap_df[~snap_df.LoanID.isin(loanids_list)]
+            #print('Check', j - len(snap_df))
+        # Sample
+        sampled_df = snap_df.sample(n=i, replace=False, random_state=1)
+        # print('Length of sampled df=', len(sampled_df))
+        sample_list.append(sampled_df)
+        loanids_list.extend(sampled_df.LoanID.unique().tolist())
+    agg_sample_df = pd.concat(sample_list)
+    return agg_sample_df
+
+
 def traintest_split(observation_frame, testsize=0.2):
     X = observation_frame.drop('Default', axis=1)
     Y = observation_frame.Default
@@ -221,14 +257,15 @@ pre_frame = pd.concat([create_12mDefault(d, performance_frame) for d in date_lis
 # Remove observations with several defaults:
 pre_frame = remove_default_dupl(pre_frame)
 # Random Sample
-pre_frame = select_sample(pre_frame)
-observation_frame = pre_frame
+observation_frame = sample_wo_duplicates(pre_frame)
+#observation_frame2 = select_sample(pre_frame)
 
 
 
 '''
  Variable selection and binning
 '''
+
 
 # Treatment of missing values:
 #Group MatruityDate by year
@@ -490,11 +527,66 @@ def woeiv_results(df, cont_var, cat_var, dfltvar_name='Default'):
 
 iv, fine_woe, coarse_woe = woeiv_results(df=observation_frame, cont_var=X_cont, cat_var=X_cat) # Drop non-coarsed CLDS in coarse df
 
+#selection rule IV > 0.10
+inputs = iv[iv.coarse_IV > 0.1].VAR_NAME.tolist()
+covariates = observation_frame[inputs]
+# covariates[covariates.select_dtypes(['category','bool']).columns] = covariates.select_dtypes(['category','bool']).astype('int')
+# covariates = covariates.drop(labels='CLDS', axis=1)
+
+
+'''
+Check for Collinearity and Multicollineairty 
+'''
+
+# Collineairty - Correlation:
+covariates.ModFlag = covariates.ModFlag.replace(['Y','N'], [1,0]) # convert to numeric
+covariates[covariates.select_dtypes('category').columns] = covariates.select_dtypes('category').astype('float') #convert to numeric
+covariates_corr = covariates.corr()
+
+# Multicollineairty
+from statsmodels.regression.linear_model import OLS
+from statsmodels.tools.tools import add_constant
+
+def variance_inflation_factors(exog_df, addconst=False):
+    '''
+    Parameters
+    ----------
+    exog_df : dataframe, (nobs, k_vars)
+        design matrix with all explanatory variables, as for example used in
+        regression.
+    addconst: Add constant to dataframe
+
+    Returns
+    -------
+    vif : Series
+        variance inflation factors
+    '''
+    if addconst:
+        exog_df = add_constant(exog_df)
+    vif = {}
+    for col in exog_df:
+        reg_rsq = OLS(exog_df[col].values, exog_df.drop(col, axis=1).values).fit().rsquared
+        print(col, reg_rsq)
+        vif[col] = 1 / (1 - reg_rsq)
+    return vif
+
+#Compute VIF:
+vif = variance_inflation_factors(covariates, True)
+vif = pd.DataFrame(vif.values(), index=vif.keys(), columns=['VIF'])
+
+#Drop variables with VIF > 5 and compute VIF second time
+keep_var = vif[vif < 5].dropna().index.tolist()
+vif_2nd = variance_inflation_factors(covariates[keep_var], addconst=True) # No VIF > 5, then good to go
+vif_2nd = pd.DataFrame(vif_2nd.values(), index=vif_2nd.keys(), columns=['VIF_2nd'])
+
+
 # Write results to excel
 writer = pd.ExcelWriter('classicalPD_IVs.xlsx', engine='xlsxwriter')
 iv.to_excel(writer, sheet_name='IV')
 coarse_woe.to_excel(writer, sheet_name='Coarse')
 fine_woe.to_excel(writer, sheet_name='Fine')
+covariates_corr.to_excel(writer, sheet_name='Correlation')
+vif.to_excel(writer, sheet_name='VIF')
 writer.save()
 
 '''
@@ -502,15 +594,9 @@ Logistic regression
 '''
 #equivalent, different library: sk.linear_model.LinearRegression()
 
-#selection rule IV > 0.10
-inputs = iv[iv.coarse_IV > 0.1].VAR_NAME.tolist()
-df_input = observation_frame[inputs]
-df_input.ModFlag = df_input.ModFlag.replace(['Y','N'], [True,False])
-df_input[df_input.select_dtypes(['category','bool']).columns] = df_input.select_dtypes(['category','bool']).astype('int')
-df_input = df_input.drop(labels='CLDS', axis=1)
 
 #logistic regression
-logit_model = sm.Logit(observation_frame.Default, df_input.astype(float))
+logit_model = sm.Logit(observation_frame.Default, covariates)
 result = logit_model.fit()
 print(result.summary2())
 
