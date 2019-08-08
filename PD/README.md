@@ -1,0 +1,9 @@
+This branch contains the newly constructed feature under ML4Credit/ML4Credit/PD/models/model_serving/data_selection.py.  It contains a Python script that repeatedly applies a number of functions that correctly construct the PD dataset the way it is required:
+
+  - read_file(...): This function reads in the dataset stored in a subfolder 'Data/Performance_HARP.txt'. It can be downloaded from : https://loanperformancedata.fanniemae.com/lppub/index.html# or is stored in Diego's Public Folder (please note it is a very large file). Furthermore, this function defines additional 3m, 6m, 9m and 12m arrears variables.
+  - create_12mDefault(...): This function takes a list of snapshot dates and constructs the default flag for each loan (that is healthy) for every snapshot moment by monitoring the loan performance over the course of 12 months, utilizing the CLDS flag denoting 90 days past due when CLDS >= 2.
+  - remove_default_dupl(...): This function removes the loans that occur at default multiple times, i.e. each loan that defaults, will be only present once in the dataset. We made the arbitrary choice to keep the first appearing the default. 
+  - select_sample(...): This function selects 1/8th of the current dataset by dividing the size of the dataset by 8 twice, storing that number and using it to slice out a random sample of every quarter. These are appended back together resulting in a new dataframe with equal contributions of every quarter and approximately equal to the size of the portfolio. 
+  - traintest_split(...): This function performs a split up in train and test size of 80%/20% (currently hard-coded). The 20% test set should be used by both Classical model and ML teams to perform the analysis on. 
+
+The script finally provides the X_train, X_test, y_train and y_test dataframes ready for analysis. 
