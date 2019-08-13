@@ -42,6 +42,8 @@ import pandas as pd
 import numpy as np
 import re
 import traceback
+import dask.dataframe as dd
+from dask.distributed import Client
 from pandas import Series
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -245,7 +247,7 @@ def sample_wo_duplicates(observ_df):
 
 def traintest_split(observation_frame, testsize=0.2):
     X = observation_frame.drop('Default', axis=1)
-    Y = observation_frame.Default
+    Y = observation_frame.Default.to_frame()
     X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=testsize, random_state=1)
     return X_train, X_test, y_train, y_test
 
@@ -256,10 +258,11 @@ date_list = ['03/01/2016', '06/01/2016', '09/01/2016', '12/01/2016', '03/01/2017
 pre_frame = pd.concat([create_12mDefault(d, performance_frame) for d in date_list])
 # Remove observations with several defaults:
 pre_frame = remove_default_dupl(pre_frame)
-# Random Sample
-observation_frame = sample_wo_duplicates(pre_frame)
-#observation_frame2 = select_sample(pre_frame)
-
+# Sampling
+post_frame = sample_wo_duplicates(pre_frame)
+# Train/test split
+X_train, X_test, y_train, y_test = traintest_split(post_frame)
+#observation_frame = X_train
 
 
 '''
@@ -268,32 +271,29 @@ observation_frame = sample_wo_duplicates(pre_frame)
 
 
 # Treatment of missing values:
-#Group MatruityDate by year
-observation_frame['maturity_year'] = observation_frame.MaturityDate.apply(lambda x: x[-4:]).astype('int')
-observation_frame = observation_frame.drop(labels=['MaturityDate'], axis=1)
+#Change MatruityDate to maturity year
+X_train['maturity_year'] = X_train.MaturityDate.apply(lambda x: x[-4:]).astype('int')
+X_train = X_train.drop(labels=['MaturityDate'], axis=1)
 
 # Add coarsed CLDS (<3)
-#observation_frame['CLDS_coarse'] = observation_frame.CLDS.apply(lambda x: x if x == 'X' else 'NAN' if x == 'NAN' else '>3' if int(x) >= 3 else x).astype('category')
-observation_frame.CLDS = observation_frame.CLDS.astype('category')
+X_train.CLDS = X_train.CLDS.astype('category')
 
+# Remove variables with more than 20% missing values
 missing_tolerance = 20 #percent
-col_del = observation_frame.columns[observation_frame.isnull().sum() * 100 / len(observation_frame) > missing_tolerance]
-observation_frame = observation_frame.drop(labels=col_del, axis=1)
-X_cont = observation_frame.select_dtypes(include=['int64','float32','float64']).columns
-X_cat = observation_frame.select_dtypes(include=['category']).columns
+col_del = X_train.columns[X_train.isnull().sum() * 100 / len(X_train) > missing_tolerance]
+X_train = X_train.drop(labels=col_del, axis=1)
 
-# Replace missing values: continious -> mean, category -> mode
-col_fill_mean = observation_frame[X_cont].columns[observation_frame[X_cont].isnull().mean() > 0]
-observation_frame[col_fill_mean] = observation_frame[col_fill_mean].fillna(observation_frame[col_fill_mean].mean())  #does mean need to be an integer?
-col_fill_mode = observation_frame[X_cat].columns[observation_frame[X_cat].isnull().sum() * 100 / len(observation_frame) > 0]
-observation_frame[col_fill_mode] = observation_frame[col_fill_mode].fillna(observation_frame[col_fill_mode].mode())
-
-#Select all categorical and continuous variables.
-X_cont = ['CurrInterestRate', 'CAUPB', 'LoanAge', 'MonthsToMaturity', 'AdMonthsToMaturity']# Manual selections
-X_cont = np.delete(X_cont, np.where(X_cont == 'Default'))
-X_cat = observation_frame.select_dtypes(include=['category']).columns.values
+# List of numeric and categorical variables
+X_cont = X_train.select_dtypes(include=['int64','float32','float64']).columns.values
+X_cont = np.delete(X_cont, np.where(X_cont == 'Arrears'))
+X_cat = X_train.select_dtypes(include=['category']).columns.values
 X_cat = np.delete(X_cat, np.where(X_cat == 'MSA')) # Remove MSA for the moment
-Y = ['Default']
+
+# Replace missing values: numeric/continious -> mean, category -> mode
+col_fill_mean = X_train[X_cont].columns[X_train[X_cont].isnull().mean() > 0]
+X_train[col_fill_mean] = X_train[col_fill_mean].fillna(X_train[col_fill_mean].mean())
+col_fill_mode = X_train[X_cat].columns[X_train[X_cat].isnull().sum() * 100 / len(X_train) > 0]
+X_train[col_fill_mode] = X_train[col_fill_mode].fillna(X_train[col_fill_mode].mode())
 
 # --> develop  treatment of extreme values
 
@@ -494,7 +494,7 @@ def data_vars(df1, target, max_bin = 20, force_bin = 3):
     return (iv_df, iv)
 
 
-def woeiv_results(df, cont_var, cat_var, dfltvar_name='Default'):
+def woeiv_results(df, dfltvar, cont_var, cat_var):
     """
     Aggregate IV/WoE results in dataframes
     Parameters
@@ -502,19 +502,19 @@ def woeiv_results(df, cont_var, cat_var, dfltvar_name='Default'):
     df: observation dataframe
     cont_var: continious variables
     cat_var: categorical variables
-    dfltvar_name: Name of default column in df dataframe.
+    dfltvar: column of default
 
     Returns IV df, fine_WoE df and coarse_WoE df
     -------
 
     """
     # Fine Classing
-    fine_cont_woe = pd.concat([WOE(df[dfltvar_name], df[x], var_name=x) for x in cont_var])
+    fine_cont_woe = pd.concat([WOE(dfltvar, df[x], var_name=x) for x in cont_var])
     fine_cont_iv = fine_cont_woe[['VAR_NAME', 'IV']].drop_duplicates()
-    fine_cat_woe = pd.concat([WOE(df[dfltvar_name], df[x], var_name=x, binning=False) for x in cat_var])
+    fine_cat_woe = pd.concat([WOE(dfltvar, df[x], var_name=x, binning=False) for x in cat_var])
     fine_cat_iv = fine_cat_woe[['VAR_NAME', 'IV']].drop_duplicates()
     # Coarse Classing (only for continious variables
-    coarse_cont_woe, coarse_cont_iv = data_vars(df[cont_var], df[dfltvar_name])
+    coarse_cont_woe, coarse_cont_iv = data_vars(df[cont_var], dfltvar)
 
     final_iv = pd.concat([pd.merge(fine_cont_iv, coarse_cont_iv, how='inner', on='VAR_NAME'),
                           pd.merge(fine_cat_iv, fine_cat_iv, how='inner', on='VAR_NAME')])
@@ -525,13 +525,11 @@ def woeiv_results(df, cont_var, cat_var, dfltvar_name='Default'):
     return final_iv, final_fine_woe, final_coarse_woe
 
 
-iv, fine_woe, coarse_woe = woeiv_results(df=observation_frame, cont_var=X_cont, cat_var=X_cat) # Drop non-coarsed CLDS in coarse df
+iv, fine_woe, coarse_woe = woeiv_results(df=X_train, dfltvar=y_train, cont_var=X_cont, cat_var=X_cat) # Drop non-coarsed CLDS in coarse df
 
 #selection rule IV > 0.10
 inputs = iv[iv.coarse_IV > 0.1].VAR_NAME.tolist()
-covariates = observation_frame[inputs]
-# covariates[covariates.select_dtypes(['category','bool']).columns] = covariates.select_dtypes(['category','bool']).astype('int')
-# covariates = covariates.drop(labels='CLDS', axis=1)
+covariates = X_train[inputs]
 
 
 '''
@@ -543,7 +541,7 @@ covariates.ModFlag = covariates.ModFlag.replace(['Y','N'], [1,0]) # convert to n
 covariates[covariates.select_dtypes('category').columns] = covariates.select_dtypes('category').astype('float') #convert to numeric
 covariates_corr = covariates.corr()
 
-# Multicollineairty
+# Multicollineairty - VIF
 from statsmodels.regression.linear_model import OLS
 from statsmodels.tools.tools import add_constant
 
@@ -566,7 +564,6 @@ def variance_inflation_factors(exog_df, addconst=False):
     vif = {}
     for col in exog_df:
         reg_rsq = OLS(exog_df[col].values, exog_df.drop(col, axis=1).values).fit().rsquared
-        print(col, reg_rsq)
         vif[col] = 1 / (1 - reg_rsq)
     return vif
 
@@ -579,6 +576,8 @@ keep_var = vif[vif < 5].dropna().index.tolist()
 vif_2nd = variance_inflation_factors(covariates[keep_var], addconst=True) # No VIF > 5, then good to go
 vif_2nd = pd.DataFrame(vif_2nd.values(), index=vif_2nd.keys(), columns=['VIF_2nd'])
 
+#Select covariates with VIF < 5
+covariates = covariates[vif_2nd.drop('const', axis=0).index.tolist()]
 
 # Write results to excel
 writer = pd.ExcelWriter('classicalPD_IVs.xlsx', engine='xlsxwriter')
@@ -587,6 +586,7 @@ coarse_woe.to_excel(writer, sheet_name='Coarse')
 fine_woe.to_excel(writer, sheet_name='Fine')
 covariates_corr.to_excel(writer, sheet_name='Correlation')
 vif.to_excel(writer, sheet_name='VIF')
+vif_2nd.to_excel(writer, sheet_name='VIF_2nd')
 writer.save()
 
 '''
@@ -596,14 +596,48 @@ Logistic regression
 
 
 #logistic regression
-logit_model = sm.Logit(observation_frame.Default, covariates)
-result = logit_model.fit()
-print(result.summary2())
+def run_logit(y, X):
+    model = sm.Logit(y_train, covariates)
+    rslt = model.fit()
+    print(rslt.summary2())
+    return model, rslt
+
+# from sklearn.linear_model import LogisticRegression
+# def run_logit2(y, X):
+#     model = LogisticRegression()
+#     rslt = model.fit(y, X)
+#     return model, rslt
+
+logit_model, results = run_logit(y_train, covariates)
+
+#Drop variable with p-value > 0.01:
+cov_proc = results.pvalues[results.pvalues < 0.01].index.tolist()
+logit_model_proc, results_proc = run_logit(y_train, cov_proc)
+
+# Create, output AUC
+X_test = X_test[cov_proc]
+X_test.ModFlag = X_test.ModFlag.replace(['Y','N'], [1,0]) # convert to numeric
+X_test[X_test.select_dtypes('category').columns] = X_test.select_dtypes('category').astype('float') #convert to numeric
+predicted = results.predict(X_test)
+from sklearn.metrics import roc_auc_score, roc_curve
+auc = roc_auc_score(y_true=y_test, y_score=predicted)
+fpr, tpr, thresholds = roc_curve(y_true=y_test, y_score=predicted)
+print("AUC :", auc)
+
+### Plot ROC, AUC etc.
+diag_line = np.linspace(0, 1, len(fpr))
+plt.plot(diag_line, diag_line, linestyle='--', c='red')
+plt.plot(fpr, tpr)
+#plt.plot(thresholds)
+plt.ylabel('True Pos. Rate')
+plt.xlabel('False Pos. Rate')
+plt.text(0.90, 0.05, 'AUC = {s}%'.format(s=np.round(auc*100, 2)), horizontalalignment='center', verticalalignment='center')
+plt.show()
 
 
 """
 Appendix: Variable exploration, description of the dataset
 """
 #SellerName
-len(observation_frame.SellerName.unique())
-observation_frame[observation_frame['SellerName']=='Other'].count
+len(X_train.SellerName.unique())
+X_train[X_train['SellerName']=='Other'].count
