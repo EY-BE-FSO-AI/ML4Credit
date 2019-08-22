@@ -36,6 +36,30 @@ Glossary mapping
 # RMWPF                = Repurchase Make Whole Proceeds Flag (P)
 # FPWA                 = Foreclosure Principal Write-off Amount (P)
 # ServicingIndicator   = SERVICING ACTIVITY INDICATOR (P)
+# BCS                  = Borrower Credit Score (A)
+# channel              = Channel (A)
+# CBCS                 = Co-Borrower Credit Score (A)
+# seller_name          = Seller Name (A)
+# OIR                  = Original Interest Rate (A)
+# OUPB                 = Original Unpaid Principal Balance (A)
+# OLT                  = Original Loan Term (A)
+# ODate                = Origination Date (A)
+# FPDate               = First Payment Date (A)
+# OLTV                 = Original Loan-to-Value (A)
+# OCLTV                = Original Combined Loan-to-Value (A)
+# nbr_borr             = Number of borrowers (A)
+# DTI                  = Debt-To-Income ratio (A)
+# FTHBI                = First-Time Home Buyer Indicator (A)
+# LoanPurp             = Loan Purpose (A)
+# PropType             = Property Type (A)
+# nb_units             = number of units (A)
+# OccupStatus          = Occupancy status (A)
+# PropState            = Property State (A)
+# ZIP                  = ZIP (A)
+# MIP                  = Mortgage Insurance Percentage (A)
+# ProdType             = Product Type (A)
+# MIT                  = Mortgage Insurance Type (A)
+# RMI                  = Relocation Mortgage Indicator (A)
 
 """
     Import statements 
@@ -51,6 +75,9 @@ col_per = ['LoanID', 'MonthRep', 'Servicer', 'CurrInterestRate', 'CAUPB', 'LoanA
            'LastInstallDate', 'ForeclosureDate', 'DispositionDate', 'ForeclosureCosts', 'PPRC', 'AssetRecCost', 'MHEC',
            'ATFHP', 'NetSaleProceeds', 'CreditEnhProceeds', 'RPMWP', 'OFP', 'NIBUPB', 'PFUPB', 'RMWPF',
            'FPWA', 'ServicingIndicator']
+
+col_acq = ['LoanID','channel', 'seller_name','OIR','OUPB','OLT','ODate','FPDate','OLTV','OCLTV','nbr_borr','DTI','BCS',
+           'FTHBI', 'LoanPurp', 'PropType','nb_units','OccupStatus','PropState','ZIP','MIP','ProdType', 'CBCS','MIT','RMI']
 
 # Python will guess the datatypes not specified in the map function, for dates the dtype will be 'object'. (hence: here all dates)
 # If an expected integer variables contains NaN values it will be set to 'float32'
@@ -68,9 +95,9 @@ extended_selec_per = ['LoanID', 'MonthRep', 'Servicer', 'CurrInterestRate', 'CAU
 
 col_per_subset = extended_selec_per
 
-def read_file(file_name='Data/Performance_HARP.txt', ref_year=None, use_cols=['LoanID','CLDS']):
-    df = pd.read_csv(file_name, sep='|', names=col_per, dtype=perf_type_map, usecols=use_cols,
-                     index_col=False, nrows=1e6)
+def read_file(file_name, ref_year, col_names, use_cols, type_map):
+    df = pd.read_csv(file_name, sep='|', names=col_names, dtype=type_map, usecols=use_cols,
+                     index_col=False)
     if ref_year != None:
         df = df[df.MonthRep.str.contains('|'.join(ref_year))]
     return df
@@ -154,6 +181,7 @@ def create_12mDefault(date, perf_df):
 def remove_default_dupl(observ_df):
     """
     Remove observations with more than one default in observation dataframe
+    (In other words remove cured observations)
     Parameters
     ----------
     observ_df: observation dataframe
@@ -195,12 +223,15 @@ if __name__ == "__main__":
     # Performance_HARP.txt: http://www.fanniemae.com/portal/funding-the-market/data/loan-performance-data.html
     use_years = None # e.g. ['2009', '2010', '2011']
     # Create the default flag for the whole dataset
-    dflt_frame = run_defaultflag(file_name='Data/Performance_HARP.txt', ref_year=use_years, use_cols=['LoanID','CLDS','MonthRep']) #Or "A" dataframe
+    dflt_frame = run_defaultflag(file_name='Data/Performance_HARP.txt', ref_year=use_years, col_names=col_per,
+                                 use_cols=['LoanID','CLDS','MonthRep'], type_map=perf_type_map) #Or "A" dataframe
     # Read the performance frame:
-    performance_frame = read_file(file_name='Data/Performance_HARP.txt', ref_year=use_years, use_cols=col_per_subset) #Or "B" dataframe
+    performance_frame = read_file(file_name='Data/Performance_HARP.txt', ref_year=use_years, col_names=col_per,
+                                  use_cols=col_per_subset, type_map=perf_type_map) #Or "B" dataframe
     # Join both dataframe
     performance_frame = pd.merge(performance_frame, dflt_frame[['LoanID','MonthRep', 'Default']], on=['LoanID','MonthRep'])
     # Read the acquisition frame:
-    acquisition_frame = read_file(file_name='Data/Acquisition_HARP.txt')
+    acquisition_frame = read_file(file_name='Data/Acquisition_HARP.txt', ref_year=None, col_names=col_acq,
+                                  use_cols=col_acq, type_map=None)
     # Full dataset:
-    full_frame = performance_frame.join(acquisition_frame, how='outer', on='LoanID')
+    full_frame = pd.merge(performance_frame,acquisition_frame, on='LoanID')
