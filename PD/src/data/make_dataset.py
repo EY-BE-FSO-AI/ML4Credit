@@ -194,12 +194,13 @@ def run_defaultflag(file_name, ref_year=['2017'], use_cols=['LoanID','CLDS']):
 
 if __name__ == "__main__":
     # Performance_HARP.txt: http://www.fanniemae.com/portal/funding-the-market/data/loan-performance-data.html
+    use_years = None # e.g. ['2009', '2010', '2011']
     # Create the default flag for the whole dataset
-    clds_frame = run_defaultflag(file_name='Data/Performance_HARP.txt', ref_year=None, use_cols=['LoanID','CLDS','MonthRep']) #Or "A" dataframe
+    dflt_frame = run_defaultflag(file_name='Data/Performance_HARP.txt', ref_year=use_years, use_cols=['LoanID','CLDS','MonthRep']) #Or "A" dataframe
     # Read the performance frame:
-    performance_frame = read_file(file_name='Data/Performance_HARP.txt', use_cols=col_per_subset) #Or "B" dataframe
+    performance_frame = read_file(file_name='Data/Performance_HARP.txt', ref_year=use_years, use_cols=col_per_subset) #Or "B" dataframe
     # Join both dataframe
-    performance_frame = performance_frame.join(clds_frame[['LoanID','Default']], how='right', on='LoanID')
+    performance_frame = performance_frame.join(dflt_frame[['LoanID','Default']], how='right', on='LoanID')
     # Read the acquisition frame:
     acquisition_frame = read_file(file_name='Data/Acquisition_HARP.txt')
     # Full dataset:
