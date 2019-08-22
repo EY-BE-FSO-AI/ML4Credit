@@ -70,7 +70,7 @@ col_per_subset = extended_selec_per
 
 def read_file(file_name='Data/Performance_HARP.txt', ref_year=None, use_cols=['LoanID','CLDS']):
     df = pd.read_csv(file_name, sep='|', names=col_per, dtype=perf_type_map, usecols=use_cols,
-                     index_col=False)
+                     index_col=False, nrows=1e6)
     if ref_year != None:
         df = df[df.MonthRep.str.contains('|'.join(ref_year))]
     return df
@@ -146,7 +146,7 @@ def create_12mDefault(date, perf_df):
 
     pf_obs_defaults = pf_obs_defaults.drop_duplicates(keep='last').values
     obs_df['Default'] = 0
-    obs_df.loc[obs_df['LoanID'].isin(~pf_obs_defaults), 'Default'] = 1
+    obs_df.loc[obs_df['LoanID'].isin(pf_obs_defaults), 'Default'] = 1
 
     return obs_df
 
@@ -162,19 +162,17 @@ def remove_default_dupl(observ_df):
     -------
     final observation dataframe
     """
-    # Check in observation frame for Loans with more than one defaults per loan ID:
-    dft_per_loan = observ_df.groupby('LoanID').Default.sum()
-    # List of Loan IDs with more than 1 default:
-    dft_per_loan_ids = dft_per_loan[dft_per_loan > 1].index.tolist()
-    # Dataframe of loans with more than 1 default:
-    dft_per_loan_df = observ_df[observ_df.LoanID.isin(dft_per_loan_ids)]
-    # Remove Loans with default flag=0 (cured or not yet in default) and keep 'first' appearing default:
-    dft_per_loan_df = dft_per_loan_df[dft_per_loan_df.Default > 0].drop_duplicates(subset='LoanID', keep='first')
-    # Healthy dataframe without any loans with more than 1 default
-    healthy_frame = observ_df.drop(observ_df[observ_df.LoanID.isin(dft_per_loan_ids)].index)
-    # Concat healthy frame and frame containing the filtered loans with
-    observs_df_new = pd.concat([healthy_frame, dft_per_loan_df])
-
+    dft_per_loan = observ_df.groupby('LoanID')
+    res = []
+    for group, grouped in dft_per_loan:
+        try:
+            #Get first appearance of a default
+            change_index = grouped[grouped.Default == 1].drop_duplicates(subset='LoanID', keep='first').index.values[0]
+            #Drop the rest
+            res.append( grouped.loc[:change_index, :] )
+        except:
+            res.append(grouped)
+    observs_df_new = pd.concat(res)
     return observs_df_new
 
 def run_defaultflag(file_name, ref_year=['2017'], use_cols=['LoanID','CLDS']):
@@ -183,14 +181,15 @@ def run_defaultflag(file_name, ref_year=['2017'], use_cols=['LoanID','CLDS']):
     Returns
     -------
     '''
-    clds_frame = read_file(file_name, ref_year, use_cols)
+    dflt_frame = read_file(file_name, ref_year, use_cols)
     res = []
-    for d in clds_frame.MonthRep.unique():
-        res.append(create_12mDefault(d, clds_frame))
+    for d in dflt_frame.MonthRep.unique():
+        res.append(create_12mDefault(d, dflt_frame))
         print('Date {d} done.'.format(d=d))
-    clds_frame = pd.concat(res)
-    clds_frame = remove_default_dupl(clds_frame)
-    return clds_frame
+    dflt_frame = pd.concat(res)
+    print('Removing duplicate defaults...')
+    dflt_frame = remove_default_dupl(dflt_frame)
+    return dflt_frame
 
 if __name__ == "__main__":
     # Performance_HARP.txt: http://www.fanniemae.com/portal/funding-the-market/data/loan-performance-data.html
@@ -200,7 +199,7 @@ if __name__ == "__main__":
     # Read the performance frame:
     performance_frame = read_file(file_name='Data/Performance_HARP.txt', ref_year=use_years, use_cols=col_per_subset) #Or "B" dataframe
     # Join both dataframe
-    performance_frame = performance_frame.join(dflt_frame[['LoanID','Default']], how='right', on='LoanID')
+    performance_frame = pd.merge(performance_frame, dflt_frame[['LoanID','MonthRep', 'Default']], on=['LoanID','MonthRep'])
     # Read the acquisition frame:
     acquisition_frame = read_file(file_name='Data/Acquisition_HARP.txt')
     # Full dataset:
