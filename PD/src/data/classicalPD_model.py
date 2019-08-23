@@ -295,6 +295,11 @@ X_train[col_fill_mean] = X_train[col_fill_mean].fillna(X_train[col_fill_mean].me
 col_fill_mode = X_train[X_cat].columns[X_train[X_cat].isnull().sum() * 100 / len(X_train) > 0]
 X_train[col_fill_mode] = X_train[col_fill_mode].fillna(X_train[col_fill_mode].mode())
 
+#Additional:
+X_train.Arrears_6m = X_train.Arrears_6m.astype('int').replace(5, 4).astype('category')
+X_train.Arrears_6m = X_train.Arrears_6m.astype('int').replace(4, 3).astype('category')
+X_train.Arrears_6m = X_train.Arrears_6m.astype('int').replace(3, 2).astype('category')
+
 # --> develop  treatment of extreme values
 
 
@@ -359,7 +364,7 @@ def WOE(Y, X, var_name="VAR", binning=True, nb_quantiles=10):
     d3 = d3.replace([np.inf, -np.inf], 0)
     d3.IV = d3.IV.sum()
     d3 = d3.reset_index(drop=True)
-    d3["BIN"] = d3.MIN_VALUE.map(str)
+    d3["BIN"] = d3.MIN_VALUE #d3.MIN_VALUE.map(str)
     d3 = d3.drop(labels=['MIN_VALUE', 'MAX_VALUE'], axis=1)
     cols = d3.columns.to_list()
     d3 = d3[cols[:1] + cols[-1:] + cols[1:-1]]
@@ -420,6 +425,8 @@ def mono_bin(Y, X, n=20, m=3, var_name="VAR"):
     d3 = d3.replace([np.inf, -np.inf], 0)
     d3.IV = d3.IV.sum()
     d3["BIN"] = "(" + d3.MIN_VALUE.map(str) + ", " + d3.MAX_VALUE.map(str) + "]"
+    d3["BIN_low"] = d3.MIN_VALUE
+    d3["BIN_up"] = d3.MAX_VALUE
     d3 = d3.drop(labels=['MIN_VALUE', 'MAX_VALUE'], axis=1)
     cols = d3.columns.to_list()
     d3 = d3[cols[:1] + cols[-1:] + cols[1:-1]]
@@ -525,7 +532,7 @@ def woeiv_results(df, dfltvar, cont_var, cat_var):
     return final_iv, final_fine_woe, final_coarse_woe
 
 
-iv, fine_woe, coarse_woe = woeiv_results(df=X_train, dfltvar=y_train, cont_var=X_cont, cat_var=X_cat) # Drop non-coarsed CLDS in coarse df
+iv, fine_woe, coarse_woe = woeiv_results(df=X_train, dfltvar=y_train['Default'], cont_var=X_cont, cat_var=X_cat) # Drop non-coarsed CLDS in coarse df
 
 #selection rule IV > 0.10
 inputs = iv[iv.coarse_IV > 0.1].VAR_NAME.tolist()
@@ -579,6 +586,86 @@ vif_2nd = pd.DataFrame(vif_2nd.values(), index=vif_2nd.keys(), columns=['VIF_2nd
 #Select covariates with VIF < 5
 covariates = covariates[vif_2nd.drop('const', axis=0).index.tolist()]
 
+
+'''
+Logistic regression
+'''
+
+#Logistic regression
+#equivalent, different library: sk.linear_model.LinearRegression()
+def run_logit(y, X):
+    model = sm.Logit(y, X)
+    rslt = model.fit()
+    print(rslt.summary2())
+    return model, rslt
+
+# Use WOE values of continious binned variables:
+def map_var_to_woe(covariates, coarse_woe):
+    covar_bins = coarse_woe[coarse_woe.VAR_NAME.isin(covariates.columns)].groupby('VAR_NAME').apply(
+        lambda df: pd.IntervalIndex.from_arrays(df.BIN_low.astype('int'), df.BIN_up.astype('int'), closed='both')
+        if df.name in X_cont
+        else pd.IntervalIndex.from_breaks(df.index)).dropna()
+
+    binned_covar = {x: pd.cut(covariates[x], covar_bins[x]).cat.codes if x in X_cont
+    else pd.cut(covariates[x], covar_bins[x]).cat.codes + 1 for x in covariates.columns.tolist()}
+    woe_covar = {}
+    var_names = []
+    for j in binned_covar.keys():
+        woe_values = coarse_woe.groupby('VAR_NAME').WOE.apply(lambda df: df.values)[j]
+        woe_covar[j] = binned_covar[j].apply(lambda x : woe_values[x])
+        var_names.append( j )
+
+    new_covariates = covariates.drop(var_names, axis=1).join( pd.DataFrame(woe_covar), how='inner' )
+    return new_covariates
+
+covariates_woe = map_var_to_woe(covariates, coarse_woe)
+# We drop 3m arrears as it has too much correlation/collinearity with other variables.
+covariates_woe.drop('Arrears_3m', axis=1, inplace=True)
+
+# Logistic regression
+logit_model, results = run_logit(y_train, covariates_woe)
+
+#Drop variable with p-value > 0.01:
+cov_proc = results.pvalues[results.pvalues < 0.01].index.tolist()
+logit_model_proc, results_proc = run_logit(y_train, covariates_woe[cov_proc])
+
+def run_model_tests(logit_res, x_test, y_test, covar_list):
+    # Create
+    X_test_proc = x_test[covar_list]
+    X_test_proc.ModFlag = X_test_proc.ModFlag.replace(['Y','N'], [1,0]) # convert to numeric
+    X_test_proc[X_test_proc.select_dtypes('category').columns] = X_test_proc.select_dtypes('category').astype('float') #convert to numeric
+    X_test_proc = map_var_to_woe(X_test_proc, coarse_woe)
+    #Predict
+    predicted = logit_res.predict(X_test_proc)
+
+    #Get the crude binning, auc, gini:
+    crude_bins = pd.qcut(x=predicted, q=10, duplicates='drop').map(str).to_frame(name='crude_bins')
+    #crude_bins = pd.cut(predicted, np.arange(0.0, 1.1, 1/10)).map(str).to_frame(name='crude_bins')
+    df_joined = x_test.join([crude_bins, y_test], how='inner')
+    sum_actual_dflt = df_joined.groupby('crude_bins').Default.sum()
+    sum_total_accts = df_joined.groupby('crude_bins')['LoanID'].count()
+    sum_dflt_rate = (sum_actual_dflt / sum_total_accts).replace(np.nan, 0)
+    good_df = sum_total_accts - sum_actual_dflt
+    perc_good = good_df / good_df.sum()
+    perc_bad = sum_actual_dflt / sum_actual_dflt.sum()
+    cum_good = perc_good.cumsum()
+    cum_bad = perc_bad.cumsum()
+    distance = abs(cum_good - cum_bad)
+    auc_df = ( cum_bad.values[1:] + cum_bad.values[:-1] ) / 2 * ( cum_good.values[1:] - cum_good.values[:-1] )
+    analysis_df = pd.concat([sum_actual_dflt, sum_total_accts, sum_dflt_rate, good_df, perc_good, perc_bad, cum_good, cum_bad, distance], axis=1)
+    analysis_df_cols = ['Sum_of_actual_dflt', 'Sum_of_Total_Accounts', 'Sum_of_Default_Rate', 'Good', '%Good', '%Bad', 'Cum Good', 'Cum Bad', 'Distance']
+    analysis_df.columns = analysis_df_cols
+    first_row = pd.DataFrame(np.zeros((1, len(analysis_df_cols))), index=['0'], columns=analysis_df_cols)
+    analysis_df = pd.concat([first_row, analysis_df], axis=0)
+    auc = np.sum( auc_df )
+    gini = 1 - auc
+    return analysis_df, auc, gini
+
+analysis_IS, _, gini_IS = run_model_tests(results_proc, X_train, y_train, cov_proc) #Out of sample
+analysis_OoS, _, gini_OoS = run_model_tests(results_proc, X_test, y_test, cov_proc) #Out of sample
+auc_IS = (1 + gini_IS) / 2
+auc_OsS = (1 + gini_OoS) / 2
+
 # Write results to excel
 writer = pd.ExcelWriter('classicalPD_IVs.xlsx', engine='xlsxwriter')
 iv.to_excel(writer, sheet_name='IV')
@@ -587,57 +674,62 @@ fine_woe.to_excel(writer, sheet_name='Fine')
 covariates_corr.to_excel(writer, sheet_name='Correlation')
 vif.to_excel(writer, sheet_name='VIF')
 vif_2nd.to_excel(writer, sheet_name='VIF_2nd')
+analysis_OoS.to_excel(writer, sheet_name='AUC_OutofSample')
+analysis_IS.to_excel(writer, sheet_name='AUC_InSample')
 writer.save()
 
-'''
-Logistic regression
-'''
-#equivalent, different library: sk.linear_model.LinearRegression()
+#Lorenz curve
+plt.plot(analysis_OoS['Cum Bad'],analysis_OoS['Cum Good'], label='Out-of-Sample')
+plt.plot(analysis_IS['Cum Bad'],analysis_IS['Cum Good'], label='In-Sample')
+diag_line = np.linspace(0, 1, len(analysis_IS))
+plt.plot(diag_line, diag_line, linestyle='--', c='red')
+#plt.text(0.85, 0.05, 'AUC_IS = {s}%'.format(s=np.round(auc_IS*100, 2)), horizontalalignment='center', verticalalignment='center')
+#plt.text(0.90, 0.10, 'AUC_OoS = {s}%'.format(s=np.round(auc_OsS*100, 2)), horizontalalignment='center', verticalalignment='center')
+plt.xlabel('Cum bad')
+plt.ylabel('Cum good')
+plt.title('Lorenz curve')
+plt.legend()
+plt.show()
 
-
-#logistic regression
-def run_logit(y, X):
-    model = sm.Logit(y_train, covariates)
-    rslt = model.fit()
-    print(rslt.summary2())
-    return model, rslt
-
-# from sklearn.linear_model import LogisticRegression
-# def run_logit2(y, X):
-#     model = LogisticRegression()
-#     rslt = model.fit(y, X)
-#     return model, rslt
-
-logit_model, results = run_logit(y_train, covariates)
-
-#Drop variable with p-value > 0.01:
-cov_proc = results.pvalues[results.pvalues < 0.01].index.tolist()
-logit_model_proc, results_proc = run_logit(y_train, cov_proc)
+# Plot K-S graph:
+analysis_OoS['Cum Bad'].plot(rot=45)
+analysis_OoS['Cum Good'].plot(rot=45)
+plt.title('Kolmogorov-Smirnov')
+plt.legend()
+plt.show()
+analysis_IS['Cum Bad'].plot(rot=45)
+analysis_IS['Cum Good'].plot(rot=45)
+plt.title('Kolmogorov-Smirnov')
+plt.legend()
+plt.show()
 
 # Create, output AUC
-X_test = X_test[cov_proc]
-X_test.ModFlag = X_test.ModFlag.replace(['Y','N'], [1,0]) # convert to numeric
-X_test[X_test.select_dtypes('category').columns] = X_test.select_dtypes('category').astype('float') #convert to numeric
-predicted = results.predict(X_test)
-from sklearn.metrics import roc_auc_score, roc_curve
-auc = roc_auc_score(y_true=y_test, y_score=predicted)
-fpr, tpr, thresholds = roc_curve(y_true=y_test, y_score=predicted)
-print("AUC :", auc)
-
-### Plot ROC, AUC etc.
-diag_line = np.linspace(0, 1, len(fpr))
-plt.plot(diag_line, diag_line, linestyle='--', c='red')
-plt.plot(fpr, tpr)
-#plt.plot(thresholds)
-plt.ylabel('True Pos. Rate')
-plt.xlabel('False Pos. Rate')
-plt.text(0.90, 0.05, 'AUC = {s}%'.format(s=np.round(auc*100, 2)), horizontalalignment='center', verticalalignment='center')
-plt.show()
+# def compute_auc(xtest, ytest, covar_list, log_results):
+#     xtest = xtest[covar_list]
+#     xtest.ModFlag = xtest.ModFlag.replace(['Y','N'], [1,0]) # convert to numeric
+#     xtest[xtest.select_dtypes('category').columns] = xtest.select_dtypes('category').astype('float') #convert to numeric
+#     X_test_proc = map_var_to_woe(xtest, coarse_woe)
+#     predicted = log_results.predict(X_test_proc)
+#     from sklearn.metrics import roc_auc_score, roc_curve
+#     auc = roc_auc_score(y_true=ytest, y_score=predicted)
+#     fpr, tpr, thresholds = roc_curve(y_true=ytest, y_score=predicted)
+#     print("AUC :", auc)
+#     return auc, fpr, tpr
+#
+# ### Plot ROC, AUC etc.
+# auc, fpr, tpr = compute_auc(xtest=X_test, ytest=y_test, covar_list=cov_proc, log_results=results)
+# auc, fpr, tpr = compute_auc(xtest=X_train, ytest=y_train, covar_list=cov_proc, log_results=results)
+# diag_line = np.linspace(0, 1, len(fpr))
+# plt.plot(diag_line, diag_line, linestyle='--', c='red')
+# plt.plot(fpr, tpr)
+# #plt.plot(thresholds)
+# plt.ylabel('True Pos. Rate')
+# plt.xlabel('False Pos. Rate')
+# plt.text(0.90, 0.05, 'AUC = {s}%'.format(s=np.round(auc*100, 2)), horizontalalignment='center', verticalalignment='center')
+# plt.show()
 
 
 """
 Appendix: Variable exploration, description of the dataset
 """
-#SellerName
-len(X_train.SellerName.unique())
-X_train[X_train['SellerName']=='Other'].count
+
