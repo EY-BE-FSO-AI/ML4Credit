@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[93]:
 
 
 """
@@ -51,12 +51,14 @@ Glossary mapping
 import pandas as pd
 import numpy as np
 import datetime as dt
+import xgboost as xgb
 
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import roc_auc_score, accuracy_score, roc_curve, f1_score, average_precision_score, confusion_matrix
-
+from imblearn.over_sampling import SMOTE
+from xgboost import XGBClassifier
 
 # Import datasets, select features and define the default-flag column.
 col_per = ['LoanID', 'MonthRep', 'Servicer', 'CurrInterestRate', 'CAUPB', 'LoanAge', 'MonthsToMaturity',
@@ -74,30 +76,6 @@ perf_type_map = {'LoanID': 'int64', 'Servicer': 'category', 'CurrInterestRate': 
                  'NetSaleProceeds': 'float32', 'CreditEnhProceeds': 'float32', 'RPMWP': 'float32', 'OFP': 'float32',
                  'NIBUPB': 'float32', 'PFUPB': 'float32', 'RMWPF': 'category', 'FPWA': 'float32',
                  'ServicingIndicator': 'category'}
-
-extended_selec_per = col_per
-
-col_per_subset = extended_selec_per
-
-
-# In[2]:
-
-
-file_name='C:/Users/bebxadvberb/Documents/AI/Performance_HARP.txt'
-lines_to_read = 1e5
-
-
-# In[3]:
-
-
-pf = pd.read_csv(file_name, sep='|', names=col_per, index_col=False,
-                     nrows=lines_to_read)
-
-
-# In[4]:
-
-
-pf['CLDS'] = pf.CLDS.replace('X', '1').astype('float')
 
 
 # In[5]:
@@ -192,47 +170,27 @@ def traintest_split(observation_frame, testsize=0.2):
     return X_train, X_test, y_train, y_test
 
 
-# In[8]:
+# In[60]:
 
 
-# Define your snapshot dates for your observation frame:
-date_list = ['03/01/2016', '06/01/2016', '09/01/2016', '12/01/2016', '03/01/2017', '06/01/2017', '09/01/2017',
-             '12/01/2017']
-observation_frame = pd.concat([create_12mDefault(d, pf) for d in date_list])
+def create_observation_frame():
 
+    # Define your snapshot dates for your observation frame:
+    date_list = ['03/01/2016', '06/01/2016', '09/01/2016', '12/01/2016', '03/01/2017', '06/01/2017', '09/01/2017',
+                 '12/01/2017']
 
-# In[9]:
+    pf = pd.read_csv(file_name, sep='|', names=col_per, index_col=False, nrows=lines_to_read)
 
+    pf['CLDS'] = pf.CLDS.replace('X', '1').astype('float')
 
-observation_frame = observation_frame[observation_frame.CAUPB.notnull()]
-observation_frame = observation_frame[observation_frame.AdMonthsToMaturity.notnull()]
+    observation_frame = pd.concat([create_12mDefault(d, pf) for d in date_list])
 
-
-# In[10]:
-
-
-X_train, X_val, y_train, y_val = traintest_split(observation_frame)
-
-
-# In[11]:
-
-
-X,y = X_train, y_train
-
-
-# In[12]:
-
-
-X.head()
+    observation_frame = observation_frame[observation_frame.CAUPB.notnull()]
+    observation_frame = observation_frame[observation_frame.AdMonthsToMaturity.notnull()]
+    return observation_frame
 
 
 # # Start From this cell
-
-# In[13]:
-
-
-y_val.value_counts()
-
 
 # In[14]:
 
@@ -267,13 +225,7 @@ def one_hot_encode(df):
     return df
 
 
-# In[17]:
-
-
-X.head()
-
-
-# In[18]:
+# In[66]:
 
 
 def normalize(df):
@@ -282,7 +234,7 @@ def normalize(df):
     return df_norm
 
 
-# In[19]:
+# In[91]:
 
 
 def preprocess(df):
@@ -297,7 +249,6 @@ def preprocess(df):
     cat_feat = get_cat_feat(df)
 
     for cat in cat_feat:
-        print(cat)
         df[cat] = LabelEncoder().fit_transform(df[cat])
         
     df = normalize(df)
@@ -305,124 +256,113 @@ def preprocess(df):
     return df
 
 
-# In[20]:
+# In[89]:
 
 
-X = preprocess(X)
+def make_balanced_df(X,y):
+
+    sm = SMOTE()
+
+    X_cols = X.columns
+    X, y = sm.fit_sample(X, y) # fit_sample takes a dataframe, but returns an array. 
+    (X, y) = (pd.DataFrame(X, columns=X_cols), pd.Series(y))
+
+    return (X,y)
 
 
-# In[21]:
+# In[84]:
 
 
-from imblearn.over_sampling import SMOTE
-sm = SMOTE()
-
-X_cols = X.columns
-X, y = sm.fit_sample(X, y) # fit_sample takes a dataframe, but returns an array. 
-(X, y) = (pd.DataFrame(X, columns=X_cols), pd.Series(y))
-print(y.value_counts())
-
-
-# In[22]:
-
-
-X.head()
-
-
-# In[23]:
-
-
-# DIVIDE THE DATA IN 10 STRATIFIED FOLDS
-skf = StratifiedKFold(n_splits=10)
-skf.get_n_splits(X, y)
-
-
-# In[25]:
-
-
-from xgboost import XGBClassifier
-model = XGBClassifier()
-
-
-# In[28]:
-
-
-for train_index, test_index in skf.split(X, y):
+def cross_validation():
+    # DIVIDE THE DATA IN 10 STRATIFIED FOLDS
+    skf = StratifiedKFold(n_splits=10)
+    skf.get_n_splits(X, y)
     
-    # print("TRAIN:", train_index, "TEST:", test_index)
-    X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-    y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-    print(y_train.isnull().values.any())
+    model = XGBClassifier()
     
-    # fit model on training data
-    model.fit(X_train, y_train)
+    for train_index, test_index in skf.split(X, y):
     
-    # make predictions for test data
-    y_pred = model.predict(X_test)
-    # temp = pd.concat([X_test,y_pred], axis=1)
-    print(y_pred)
+        # print("TRAIN:", train_index, "TEST:", test_index)
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+        print(y_train.isnull().values.any())
+
+        # fit model on training data
+        model.fit(X_train, y_train)
+
+        # make predictions for test data
+        y_pred = model.predict(X_test)
+        # temp = pd.concat([X_test,y_pred], axis=1)
+        print(y_pred)
+        predictions = [round(value) for value in y_pred]
+
+        # evaluate predictions
+        auc = roc_auc_score(y_test, predictions)
+        accuracy = accuracy_score(y_test, predictions)
+        f1 = f1_score(y_test, predictions)
+        print("Accuracy: %.2f%%" % (accuracy * 100.0), "|| AUC: %.2f%%" % (auc * 100.0), "|| F1 - Score: %.2f%%" % (f1 * 100.0))
+
+
+# In[73]:
+
+
+
+
+
+# In[87]:
+
+
+def test_validation(X,X_val,y,y_val):
+    X_val = preprocess(X_val)
+    model.fit(X, y)
+    y_pred = model.predict(X_val)
     predictions = [round(value) for value in y_pred]
     
-    # evaluate predictions
-    auc = roc_auc_score(y_test, predictions)
-    accuracy = accuracy_score(y_test, predictions)
-    f1 = f1_score(y_test, predictions)
-    print("Accuracy: %.2f%%" % (accuracy * 100.0), "|| AUC: %.2f%%" % (auc * 100.0), "|| F1 - Score: %.2f%%" % (f1 * 100.0))
+    auc = roc_auc_score(y_val, predictions)
+    print("AUC: " + str(auc))
+    
+    print("Confusion Matrix:")
+    print(confusion_matrix(y_val, predictions))
 
 
 # In[29]:
 
 
-X_val = preprocess(X_val)
+
 
 
 # In[31]:
 
 
-model.fit(X, y)
-y_pred = model.predict(X_val)
-
-
-# In[32]:
-
-
-predictions = [round(value) for value in y_pred]
-
-
-# In[55]:
-
-
-auc = roc_auc_score(y_val, predictions)
-print("AUC: " + str(auc))
-
-
-# In[54]:
-
-
-accuracy = accuracy_score(y_val, predictions)
-print("Accuracy: " + str(accuracy))
-
-
-# In[43]:
-
-
-print(confusion_matrix(y_val, predictions))
-
-
-# In[37]:
 
 
 
+# In[85]:
 
 
-# In[51]:
+if __name__ == '__main__':
+    file_name='C:/Users/bebxadvberb/Documents/AI/Performance_HARP.txt'
+    lines_to_read = 1e5
+    
+    observation_frame = create_observation_frame()
+    X_train, X_val, y_train, y_val = traintest_split(observation_frame)
+    X,y = X_train, y_train
+    
+    X = preprocess(X)
+    X,y = make_balanced_df(X,y)
+    
+    cross_validation()
 
 
-test = " " + "test" + "3"
+# In[90]:
 
 
-# In[52]:
+if __name__ == '__main__':
+    test_validation(X,X_val,y,y_val)
 
 
-test
+# In[94]:
+
+
+xgb.plot_importance(model)
 
