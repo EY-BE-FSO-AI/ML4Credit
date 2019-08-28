@@ -5,7 +5,7 @@
 
 
 """
-    Author: Nicolas Bulté and Verbeke Bram
+    Author: Nicolas Bulté
 """
 
 """
@@ -44,10 +44,6 @@ Glossary mapping
 # FPWA                 = Foreclosure Principal Write-off Amount (P)
 # ServicingIndicator   = SERVICING ACTIVITY INDICATOR (P)
 
-
-# In[29]:
-
-
 """
     Import statements 
 """
@@ -55,15 +51,12 @@ Glossary mapping
 import pandas as pd
 import numpy as np
 import datetime as dt
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import roc_auc_score, accuracy_score, roc_curve, f1_score, average_precision_score
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import roc_auc_score, accuracy_score, roc_curve, f1_score, average_precision_score, confusion_matrix
+
 
 # Import datasets, select features and define the default-flag column.
 col_per = ['LoanID', 'MonthRep', 'Servicer', 'CurrInterestRate', 'CAUPB', 'LoanAge', 'MonthsToMaturity',
@@ -87,22 +80,23 @@ extended_selec_per = col_per
 col_per_subset = extended_selec_per
 
 
+# In[2]:
+
+
+file_name='C:/Users/bebxadvberb/Documents/AI/Performance_HARP.txt'
+lines_to_read = 1e5
+
+
 # In[3]:
 
 
-file_name='C:/Users/bebxadvberb/Documents/AI/Trusted AI/Performance_HARP.txt'
-lines_to_read = 1e5
+pf = pd.read_csv(file_name, sep='|', names=col_per, index_col=False,
+                     nrows=lines_to_read)
 
 
 # In[4]:
 
 
-pf = pd.read_csv(file_name, 
-                 sep='|', 
-                 names=col_per, 
-                 index_col=False, 
-                 nrows=lines_to_read
-                )
 pf['CLDS'] = pf.CLDS.replace('X', '1').astype('float')
 
 
@@ -162,6 +156,32 @@ def create_12mDefault(date, perf_df):
     return df
 
 
+# In[6]:
+
+
+def select_sample(observ_df):
+    '''
+    Select randomly 1/8 of the accounts from each of the 8 quarterly snapshot; an account should appear only once. 
+    This way, the final sample will have an even mix of each quarter and will be equivalent size of the portfolio 
+    on average over the 2 years.
+    Parameters
+    ----------
+    observ_df: observation dataframe
+    Returns
+    -------
+    '''
+    snapshots = observ_df.MonthRep.unique()
+    # Store the size of (in case of 8 snapshot dates) 1/8 of the dataset, divided by 8 again to get the size of 1/8 of a snapshot set. 
+    # Use this to sample from every snapshot set to come to a final df that contains the 1/8 of the original size and has equal
+    # contribution of every quarter/snapshot moment. 
+    i = int(observ_df.shape[0] / len(snapshots) / len(snapshots))
+    l = []
+    for d in snapshots:
+        l.append(observ_df[observ_df.MonthRep == d].sample(n=i, replace=False, random_state=1))
+    df = pd.concat(l)
+    return df
+
+
 # In[7]:
 
 
@@ -191,7 +211,7 @@ observation_frame = observation_frame[observation_frame.AdMonthsToMaturity.notnu
 # In[10]:
 
 
-X_train, X_test, y_train, y_test = traintest_split(observation_frame)
+X_train, X_val, y_train, y_val = traintest_split(observation_frame)
 
 
 # In[11]:
@@ -211,7 +231,7 @@ X.head()
 # In[13]:
 
 
-y_train.value_counts(1)
+y_val.value_counts()
 
 
 # In[14]:
@@ -225,14 +245,6 @@ def get_na_feat(df):
 # In[15]:
 
 
-# DROP FEATURES WITH NA VALUES
-na_columns = get_na_feat(X)
-X = X.drop(na_columns,axis=1)
-
-
-# In[16]:
-
-
 def get_cat_feat(df):
     cat_feat = df.select_dtypes(include=['object']).columns
     return cat_feat
@@ -242,7 +254,7 @@ def get_num_feat(df):
     return num_feat
 
 
-# In[17]:
+# In[16]:
 
 
 def label_encode(df):
@@ -255,38 +267,13 @@ def one_hot_encode(df):
     return df
 
 
-# In[18]:
+# In[17]:
 
 
-X = X.drop('ModFlag', axis=1)
-X = X.drop('CLDS', axis=1)
-
-
-# In[19]:
-
-
-# FIND THE CATEGORICAL FEATURES
-cat_feat = get_cat_feat(X)
-
-for cat in cat_feat:
-    X[cat] = LabelEncoder().fit_transform(X[cat])
-    
 X.head()
 
 
-# In[20]:
-
-
-from imblearn.over_sampling import RandomOverSampler
-sm = RandomOverSampler()
-
-X_cols = X.columns
-X, y = sm.fit_sample(X, y) # fit_sample takes a dataframe, but returns an array. 
-(X, y) = (pd.DataFrame(X, columns=X_cols), pd.Series(y))
-print(y.value_counts(1))
-
-
-# In[21]:
+# In[18]:
 
 
 def normalize(df):
@@ -295,10 +282,50 @@ def normalize(df):
     return df_norm
 
 
+# In[19]:
+
+
+def preprocess(df):
+    # DROP FEATURES WITH NA VALUES
+    na_columns = get_na_feat(df)
+    df = df.drop(na_columns,axis=1)
+    
+    df = df.drop('LoanID', axis=1)
+    df = df.drop('ModFlag', axis=1)
+    
+    # FIND THE CATEGORICAL FEATURES
+    cat_feat = get_cat_feat(df)
+
+    for cat in cat_feat:
+        print(cat)
+        df[cat] = LabelEncoder().fit_transform(df[cat])
+        
+    df = normalize(df)
+    
+    return df
+
+
+# In[20]:
+
+
+X = preprocess(X)
+
+
+# In[21]:
+
+
+from imblearn.over_sampling import SMOTE
+sm = SMOTE()
+
+X_cols = X.columns
+X, y = sm.fit_sample(X, y) # fit_sample takes a dataframe, but returns an array. 
+(X, y) = (pd.DataFrame(X, columns=X_cols), pd.Series(y))
+print(y.value_counts())
+
+
 # In[22]:
 
 
-X = normalize(X)
 X.head()
 
 
@@ -310,14 +337,14 @@ skf = StratifiedKFold(n_splits=10)
 skf.get_n_splits(X, y)
 
 
-# In[24]:
+# In[25]:
 
 
 from xgboost import XGBClassifier
 model = XGBClassifier()
 
 
-# In[25]:
+# In[28]:
 
 
 for train_index, test_index in skf.split(X, y):
@@ -343,19 +370,59 @@ for train_index, test_index in skf.split(X, y):
     print("Accuracy: %.2f%%" % (accuracy * 100.0), "|| AUC: %.2f%%" % (auc * 100.0), "|| F1 - Score: %.2f%%" % (f1 * 100.0))
 
 
+# In[29]:
+
+
+X_val = preprocess(X_val)
+
+
 # In[31]:
 
 
-"""
-    Output statistics - confusion matrix
-"""
+model.fit(X, y)
+y_pred = model.predict(X_val)
 
-classification_report(y_test, y_pred)
-cm = confusion_matrix(y_test, y_pred).T
-cm = cm.astype('float')/cm.sum(axis=0)
-fig, ax = plt.subplots()
-sns.heatmap(cm, annot=True, cmap='Blues')
-ax.set_xlabel('True Label')
-ax.set_ylabel('Predicted Label')
-ax.set_title('Sampling algorithm: ' + "RandomOverSampling", loc='right', fontsize=10, fontweight='bold')
+
+# In[32]:
+
+
+predictions = [round(value) for value in y_pred]
+
+
+# In[55]:
+
+
+auc = roc_auc_score(y_val, predictions)
+print("AUC: " + str(auc))
+
+
+# In[54]:
+
+
+accuracy = accuracy_score(y_val, predictions)
+print("Accuracy: " + str(accuracy))
+
+
+# In[43]:
+
+
+print(confusion_matrix(y_val, predictions))
+
+
+# In[37]:
+
+
+
+
+
+# In[51]:
+
+
+test = " " + "test" + "3"
+
+
+# In[52]:
+
+
+test
 
