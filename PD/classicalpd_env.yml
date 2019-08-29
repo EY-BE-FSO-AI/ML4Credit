@@ -1,0 +1,14 @@
+name: classicalpd_env
+
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.6.8=h9f7ef89_7
+  - matplotlib=2.1.0=py36h11b4b9c_0
+  - numpy=1.16.4=py36h19fb1c0_0
+  - pandas=0.24.2=py36ha925a31_0
+  - scipy=1.2.1=py36h29ff71c_0
+  - seaborn=0.8.0=py36h62cb67c_0
+  - statsmodels=0.9.0=py36h452e1ab_0
+  - xlsxwriter=1.1.8=py_0
