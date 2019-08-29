@@ -203,13 +203,13 @@ def remove_default_dupl(observ_df):
     observs_df_new = pd.concat(res)
     return observs_df_new
 
-def run_defaultflag(file_name, ref_year=['2017'], use_cols=['LoanID','CLDS']):
+def run_defaultflag(file_name, ref_year=['2017'], use_cols=['LoanID','CLDS'], col_names=None, type_map=None):
     '''
     As it says.
     Returns
     -------
     '''
-    dflt_frame = read_file(file_name, ref_year, use_cols)
+    dflt_frame = read_file(file_name, ref_year, col_names, use_cols, type_map)
     res = []
     for d in dflt_frame.MonthRep.unique():
         res.append(create_12mDefault(d, dflt_frame))
