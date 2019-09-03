@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[93]:
+# In[1]:
 
 
 """
@@ -78,7 +78,14 @@ perf_type_map = {'LoanID': 'int64', 'Servicer': 'category', 'CurrInterestRate': 
                  'ServicingIndicator': 'category'}
 
 
-# In[5]:
+# In[19]:
+
+
+param = list(eta = 0.01,  objective="binary:logistic",subsample=0.9)
+model = XGBClassifier(param)
+
+
+# In[2]:
 
 
 def create_12mDefault(date, perf_df):
@@ -134,7 +141,7 @@ def create_12mDefault(date, perf_df):
     return df
 
 
-# In[6]:
+# In[3]:
 
 
 def select_sample(observ_df):
@@ -160,7 +167,7 @@ def select_sample(observ_df):
     return df
 
 
-# In[7]:
+# In[4]:
 
 
 def traintest_split(observation_frame, testsize=0.2):
@@ -170,7 +177,7 @@ def traintest_split(observation_frame, testsize=0.2):
     return X_train, X_test, y_train, y_test
 
 
-# In[60]:
+# In[5]:
 
 
 def create_observation_frame():
@@ -192,7 +199,7 @@ def create_observation_frame():
 
 # # Start From this cell
 
-# In[14]:
+# In[6]:
 
 
 def get_na_feat(df):
@@ -200,7 +207,7 @@ def get_na_feat(df):
     return na_columns
 
 
-# In[15]:
+# In[7]:
 
 
 def get_cat_feat(df):
@@ -212,7 +219,7 @@ def get_num_feat(df):
     return num_feat
 
 
-# In[16]:
+# In[8]:
 
 
 def label_encode(df):
@@ -225,7 +232,7 @@ def one_hot_encode(df):
     return df
 
 
-# In[66]:
+# In[9]:
 
 
 def normalize(df):
@@ -234,7 +241,7 @@ def normalize(df):
     return df_norm
 
 
-# In[91]:
+# In[10]:
 
 
 def preprocess(df):
@@ -256,7 +263,7 @@ def preprocess(df):
     return df
 
 
-# In[89]:
+# In[11]:
 
 
 def make_balanced_df(X,y):
@@ -270,7 +277,7 @@ def make_balanced_df(X,y):
     return (X,y)
 
 
-# In[84]:
+# In[34]:
 
 
 def cross_validation():
@@ -278,7 +285,7 @@ def cross_validation():
     skf = StratifiedKFold(n_splits=10)
     skf.get_n_splits(X, y)
     
-    model = XGBClassifier()
+    
     
     for train_index, test_index in skf.split(X, y):
     
@@ -291,10 +298,10 @@ def cross_validation():
         model.fit(X_train, y_train)
 
         # make predictions for test data
-        y_pred = model.predict(X_test)
+        y_pred = model.predict_proba(X_test)
         # temp = pd.concat([X_test,y_pred], axis=1)
         print(y_pred)
-        predictions = [round(value) for value in y_pred]
+        predictions = model.predict(X_test)
 
         # evaluate predictions
         auc = roc_auc_score(y_test, predictions)
@@ -303,20 +310,14 @@ def cross_validation():
         print("Accuracy: %.2f%%" % (accuracy * 100.0), "|| AUC: %.2f%%" % (auc * 100.0), "|| F1 - Score: %.2f%%" % (f1 * 100.0))
 
 
-# In[73]:
-
-
-
-
-
-# In[87]:
+# In[35]:
 
 
 def test_validation(X,X_val,y,y_val):
     X_val = preprocess(X_val)
     model.fit(X, y)
-    y_pred = model.predict(X_val)
-    predictions = [round(value) for value in y_pred]
+    y_pred = model.predict_proba(X_val)
+    predictions = model.predict(X_val)
     
     auc = roc_auc_score(y_val, predictions)
     print("AUC: " + str(auc))
@@ -325,19 +326,7 @@ def test_validation(X,X_val,y,y_val):
     print(confusion_matrix(y_val, predictions))
 
 
-# In[29]:
-
-
-
-
-
-# In[31]:
-
-
-
-
-
-# In[85]:
+# In[36]:
 
 
 if __name__ == '__main__':
@@ -354,15 +343,9 @@ if __name__ == '__main__':
     cross_validation()
 
 
-# In[90]:
+# In[37]:
 
 
 if __name__ == '__main__':
     test_validation(X,X_val,y,y_val)
-
-
-# In[94]:
-
-
-xgb.plot_importance(model)
 
