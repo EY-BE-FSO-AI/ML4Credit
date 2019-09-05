@@ -6,7 +6,7 @@ import scipy.stats       as stat
 import seaborn           as sns
 
 # Load the data
-df = pd.read_csv("lgd.csv", sep=",")
+df = pd.read_csv("\data\lgd.csv", sep=",")
 
 # Rename column
 df['Y'] = df.lgd_time
