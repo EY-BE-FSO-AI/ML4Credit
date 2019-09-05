@@ -38,4 +38,4 @@ for i in df.event.unique():
     n += 1
 
 # Output model dataset
-df[['Y', 'Y_Z', 'LTV_Z', 'segment']].to_csv("LGD_model_dataset.csv")
+df[['Y', 'Y_Z', 'LTV_Z', 'segment']].to_csv(os.getcwd()+"\features\LGD_model_dataset.csv")
