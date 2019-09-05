@@ -2,43 +2,38 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import datetime
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.model_selection import train_test_split
-import seaborn as sns
-
-sns.set(font_scale = 2)
-
-# Function to calculate mean absolute/squared error
-def mae(y_true, y_pred):
-    return np.mean(abs(y_true - y_pred))
-
-def mse(y_true, y_pred):
-    return np.mean((y_true - y_pred)**2)
-
-# Takes in a model, trains the model, and evaluates the model on the test set
-def fit_and_evaluate(model, X, y, X_test,y_test, logistic=True):
-    # Train the model
-    if logistic:
-        model.fit(X, y)
-
-    # Make predictions and evalute
-    model_pred = model.predict(X_test)
-    model_mae = mae(y_test, model_pred)
-    model_mse = mse(y_test, model_pred)
-
-    # Return the performance metric
-    return model, model_mae, model_mse
+import scipy.stats       as stat
+import seaborn           as sns
 
 # Load the data
-df = pd.read_csv("other\lgd.csv", sep=";")
-df.lgd_time = df.lgd_time.apply(lambda x : x.replace(",", ".")).astype(float)
+df = pd.read_csv("lgd.csv", sep=",")
 
-# Run the logistic regression
-Y_log = df['y_logistic'] # response
-X = df[['Recovery_rate', 'LTV', 'event', 'purpose1']] # features
-X_train, X_test, y_log_train, y_log_test = train_test_split(X, Y_log, test_size=0.33, random_state=42)
+# Rename column
+df['Y'] = df.lgd_time
 
-logistic_regr, logistic_mae, logistic_mse = fit_and_evaluate(LinearRegression(), X_train, y_log_train, X_test, y_log_test)
+# Plot distribution and features
+for i in ['Y', 'LTV', 'event', 'purpose1']:
+    sns.distplot(df[i], hist=True, kde=True, color = 'darkblue', hist_kws={'edgecolor':'black'}, kde_kws={'linewidth': 4})
+    plt.show()
 
+# Output Y dataset and X dataset
+df.Y.to_csv("Y.csv")
+df[['LTV', 'event', 'purpose1']].to_csv("X.csv")
 
-
+# Compare Kernel Density with the calibrated Beta Density
+fit_k   = stat.gaussian_kde(df.Y) 
+fit_b   = stat.beta.fit(df.Y, floc=0, fscale=1)
+kernel  = df.Y.map(lambda x: fit_k(x)[0])
+beta    = df.Y.map(lambda x: stat.beta.pdf(x, fit_b[0], fit_b[1], loc=fit_b[2], scale=fit_b[3]))
+plot    = pd.DataFrame({'Y': df.Y, 'kernel': list(kernel)}).sort_values(by=['Y','kernel']).drop_duplicates()
+fig, ax = plt.subplots(facecolor=(.5, .5, .5))
+ax.set_facecolor('#DCDCDC')
+ax.set_title('Kernel PDF vs. Beta PDF', color='0.8')
+ax.set_xlabel('LGD', color='Black')
+ax.set_ylabel('PDF', color='Orange')
+ax.plot(plot.Y, plot.kernel, label='Kernel')
+ax.scatter(df.Y, beta, color='Red', marker="o", label='Beta')
+ax.legend(loc='upper middle')
+ax.tick_params(labelcolor='tab:blue')
+ax.set_yscale('log')
+plt.show()
