@@ -5,8 +5,9 @@ import datetime
 import scipy.stats       as stat
 import seaborn           as sns
 
+os.chdir("..")    #Move back to the src folder
 # Load the data
-df = pd.read_csv("\data\lgd.csv", sep=",")
+df = pd.read_csv(os.getcwd()+"\data\lgd.csv", sep=",")
 
 # Rename column
 df['Y'] = df.lgd_time
