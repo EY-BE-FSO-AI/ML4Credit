@@ -20,7 +20,7 @@ for i in ['event', 'purpose1']:
   ax.set_title('LGD PDF: segmentation variable '+i+' '+str(dummy[0])+' vs '+str(dummy[1]), color='0.8')
   for j in dummy:
     sns.distplot(df.Y[df[i]==j], hist=False, rug=True, label=str(j))
-  ax.legend(loc='upper middle')
+  ax.legend(loc='upper center')
   ax.tick_params(labelcolor='tab:blue')
   plt.show()
 
@@ -30,12 +30,12 @@ df['segment'] = df.LTV
 n             = 1
 for i in df.event.unique():
   for j in df.purpose1.unique():
-    quantile                                     = stat.rankdata(df.LTV[(df.purpose1==i) & (df.event==j)])/(len(df.LTV)+1)
-    df.LTV_Z[(df.purpose1==i) & (df.event==j)]   = stat.norm.ppf(quantile)
-    df.segment[(df.purpose1==i) & (df.event==j)] = n
-    plt.scatter(df.Y_Z[(df.purpose1==i) & (df.event==j)], df.LTV_Z[(df.purpose1==i) & (df.event==j)])
+    quantile                                            = stat.rankdata(df.loc[(df.purpose1==i) & (df.event==j), 'LTV'])/(len(df.LTV)+1)
+    df.loc[(df.purpose1==i) & (df.event==j), 'LTV_Z']   = stat.norm.ppf(quantile)
+    df.loc[(df.purpose1==i) & (df.event==j), 'segment'] = n
+    plt.scatter(df.loc[(df.purpose1==i) & (df.event==j), 'Y_Z'], df.loc[(df.purpose1==i) & (df.event==j), 'LTV_Z'])
     plt.show()
     n += 1
 
 # Output model dataset
-df[['Y', 'Y_Z', 'LTV_Z', 'segment']].to_csv(os.getcwd()+"\features\LGD_model_dataset.csv")
+df[['Y', 'Y_Z', 'LTV', 'LTV_Z', 'segment']].to_csv(os.getcwd()+r'\features\LGD_model_dataset.csv')

@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,10 +8,10 @@ import seaborn           as sns
 
 os.chdir("..")    #Move back to the src folder
 # Load the data
-df = pd.read_csv(os.getcwd()+"\data\lgd.csv", sep=",")
+df = pd.read_csv(os.getcwd()+r'\data\lgd.csv', sep=",")
 
 # Rename column
-df['Y'] = df.lgd_time
+df['Y'] = df.lgd_time.apply(lambda x: 0 if x<0.001 else 1 if x>0.999 else x)
 
 # Plot distribution and features
 for i in ['Y', 'LTV', 'event', 'purpose1']:
@@ -18,12 +19,12 @@ for i in ['Y', 'LTV', 'event', 'purpose1']:
     plt.show()
 
 # Output Y dataset and X dataset
-df.Y.to_csv("Y.csv")
-df[['LTV', 'event', 'purpose1']].to_csv("X.csv")
+df.Y.to_csv(os.getcwd()+r'\data\Y.csv')
+df[['LTV', 'event', 'purpose1']].to_csv(os.getcwd()+r'\data\X.csv')
 
 # Compare Kernel Density with the calibrated Beta Density
 fit_k   = stat.gaussian_kde(df.Y) 
-fit_b   = stat.beta.fit(df.Y, floc=0, fscale=1)
+fit_b   = stat.beta.fit(df.Y[(df.Y<1) & (df.Y>0)], floc=0, fscale=1)
 kernel  = df.Y.map(lambda x: fit_k(x)[0])
 beta    = df.Y.map(lambda x: stat.beta.pdf(x, fit_b[0], fit_b[1], loc=fit_b[2], scale=fit_b[3]))
 plot    = pd.DataFrame({'Y': df.Y, 'kernel': list(kernel)}).sort_values(by=['Y','kernel']).drop_duplicates()
