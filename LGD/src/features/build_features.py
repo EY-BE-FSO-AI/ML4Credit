@@ -25,17 +25,31 @@ for i in ['event', 'purpose1']:
   plt.show()
 
 # Transform features and plot against the Y axis
+df['quantile']= df.LTV
+df['deciles'] = df.LTV
+df['Y0']      = df.LTV
+df['Y1']      = df.LTV
 df['LTV_Z']   = df.LTV
 df['segment'] = df.LTV
 n             = 1
 for i in df.event.unique():
   for j in df.purpose1.unique():
-    quantile                                            = stat.rankdata(df.loc[(df.purpose1==i) & (df.event==j), 'LTV'])/(len(df.LTV)+1)
-    df.loc[(df.purpose1==i) & (df.event==j), 'LTV_Z']   = stat.norm.ppf(quantile)
+    df.loc[(df.purpose1==i) & (df.event==j), 'quantile']= stat.rankdata(df.loc[(df.purpose1==i) & (df.event==j), 'LTV'])/(len(df.loc[(df.purpose1==i) & (df.event==j), 'LTV'])+1)
+    df.loc[(df.purpose1==i) & (df.event==j), 'deciles'] = np.around(df.loc[(df.purpose1==i) & (df.event==j), 'quantile'], decimals=1)
+    df.loc[(df.purpose1==i) & (df.event==j), 'Y0']      = df.loc[(df.purpose1==i) & (df.event==j), 'Y']==0
+    df.loc[(df.purpose1==i) & (df.event==j), 'Y1']      = df.loc[(df.purpose1==i) & (df.event==j), 'Y']==1
+    df.loc[(df.purpose1==i) & (df.event==j), 'LTV_Z']   = stat.norm.ppf(df.loc[(df.purpose1==i) & (df.event==j), 'quantile'])
     df.loc[(df.purpose1==i) & (df.event==j), 'segment'] = n
     plt.scatter(df.loc[(df.purpose1==i) & (df.event==j), 'LTV_Z'], df.loc[(df.purpose1==i) & (df.event==j), 'Y_Z'])
     plt.show()
     n += 1
+df = pd.merge(df, np.log((df.groupby(['segment','deciles'])['Y0'].count()+1-df.groupby(['segment','deciles'])['Y0'].sum())/(df.groupby(['segment','deciles'])['Y0'].sum()+1)) \
+     .reset_index(name='LTV_0'), on=['segment', 'deciles'], how='inner')
+df = pd.merge(df, np.log((df.groupby(['segment','deciles'])['Y1'].count()+1-df.groupby(['segment','deciles'])['Y1'].sum())/(df.groupby(['segment','deciles'])['Y1'].sum()+1)) \
+     .reset_index(name='LTV_1'), on=['segment', 'deciles'], how='inner')
+df = pd.merge(df, np.log(df.groupby(['segment','deciles'])['Y'].mean()/(1-df.groupby(['segment','deciles'])['Y'].mean())) \
+     .reset_index(name='LTV_LR'), on=['segment', 'deciles'], how='inner')
+
 
 # Output model dataset
-df[['Y', 'Y_Z', 'LTV', 'LTV_Z', 'segment']].to_csv(os.getcwd()+r'\features\LGD_model_dataset.csv')
+df[['Y', 'Y_Z', 'LTV', 'LTV_Z', 'LTV_LR', 'LTV_1', 'LTV_0', 'segment']].to_csv(os.getcwd()+r'\features\LGD_model_dataset.csv')
