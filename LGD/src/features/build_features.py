@@ -33,7 +33,7 @@ for i in df.event.unique():
     quantile                                            = stat.rankdata(df.loc[(df.purpose1==i) & (df.event==j), 'LTV'])/(len(df.LTV)+1)
     df.loc[(df.purpose1==i) & (df.event==j), 'LTV_Z']   = stat.norm.ppf(quantile)
     df.loc[(df.purpose1==i) & (df.event==j), 'segment'] = n
-    plt.scatter(df.loc[(df.purpose1==i) & (df.event==j), 'Y_Z'], df.loc[(df.purpose1==i) & (df.event==j), 'LTV_Z'])
+    plt.scatter(df.loc[(df.purpose1==i) & (df.event==j), 'LTV_Z', df.loc[(df.purpose1==i) & (df.event==j), 'Y_Z']])
     plt.show()
     n += 1
 
