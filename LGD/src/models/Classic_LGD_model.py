@@ -4,6 +4,7 @@ import numpy                       as np
 import scipy.stats                 as stat
 import matplotlib.pyplot           as plt
 import scipy.optimize              as optimize
+import sklearn.linear_model        as ln
 from scipy.special import loggamma as lgamma
 
 os.chdir("..")    #Move back to the src folder
@@ -13,11 +14,11 @@ df = pd.read_csv(os.getcwd()+r'\features\LGD_model_dataset.csv')
 # Optimize linear model
 def ll(data, b):
   y   = data[0]
-  x1   = data[1]
-  x2   = data[2]
-  x3   = data[3]
-  mu  = np.exp(b[0]+b[1]*x1) / (1+np.exp(b[0]+b[1]*x1))
-  p0  = np.exp(b[2]+b[3]*x2) / (1+np.exp(b[2]+b[3]*x2))
+  x1  = data[1]
+  x2  = data[2]
+  x3  = data[3]
+  p0  = np.exp(b[0]+b[1]*x2) / (1+np.exp(b[0]+b[1]*x2))
+  mu  = np.exp(b[2]+b[3]*x1) / (1+np.exp(b[2]+b[3]*x1))
   p1  = np.exp(b[4]+b[5]*x3) / (1+np.exp(b[4]+b[5]*x3))
   phi = np.exp(b[6])
   if y==0:
@@ -25,17 +26,27 @@ def ll(data, b):
   elif y==1:
     ll   = np.log(p1)
   else:
-    ll   = lgamma(phi) - lgamma(mu*phi) - lgamma((1-mu)*phi) + (mu*phi-1)*np.log(y) + (phi-mu*phi-1)*np.log(1-y) + np.log(1-p0) + np.log(1-p1)
+    ll   = lgamma(phi) - lgamma(mu*phi) - lgamma(phi-mu*phi) + (mu*phi-1)*np.log(y) + (phi-mu*phi-1)*np.log(1-y) + np.log(1-p0) + np.log(1-p1)
   return -ll
 def mll(B, data):
   df= data[['Y', 'LTV_LR', 'LTV_0', 'LTV_1']]
   return df.apply(lambda DATA: ll(DATA, B), axis=1).sum()
 
 for i in df.segment.unique():
-  solution                          = optimize.minimize(fun=mll,x0=[-1,0,-1,0,-1,0,1],args=df[df.segment==i],method='SLSQP',bounds=((-30,30),(-30,30),(-4,4),(-4,4),(-4,4),(-4,4),(0.1,None)))
-  df.loc[df.segment==i, 'mu']       = np.exp(solution.x[0]+solution.x[1]*df.LTV_LR)/(1+np.exp(solution.x[0]+solution.x[1]*df.LTV_LR))
-  df.loc[df.segment==i, 'p1']       = np.exp(solution.x[2]+solution.x[3]*df.LTV_0)/(1+np.exp(solution.x[2]+solution.x[3]*df.LTV_0))
-  df.loc[df.segment==i, 'p0']       = np.exp(solution.x[4]+solution.x[5]*df.LTV_1)/(1+np.exp(solution.x[4]+solution.x[5]*df.LTV_1))
+  if (df.Y[df.segment==i].isin([1]).sum()==0) | (df.Y[df.segment==i].isin([0]).sum()==0):
+    lr    = ln.LinearRegression().fit(df.LTV_LR[(df.segment==i) & (df.Y.isin([0,1]))].values.reshape(-1,1), df.Y[(df.segment==i) & (df.Y.isin([0,1]))])
+  else:
+    lr    = ln.LogisticRegression(random_state=0, solver='lbfgs',multi_class='multinomial').fit(df.LTV_LR[(df.segment==i) & (df.Y.isin([0,1]))].values.reshape(-1,1), df.Y[(df.segment==i) & (df.Y.isin([0,1]))])
+  o1    = lr.coef_
+  o2    = lr.intercept_
+  dummy = df.Y[(df.segment==i) & (~df.Y.isin([0,1]))]
+  lm    = ln.LinearRegression().fit(df.LTV_LR[(df.segment==i) & (~df.Y.isin([0,1]))].values.reshape(-1,1), np.log(dummy/(1-dummy)))
+  o3    = lm.coef_
+  o4    = lm.intercept_
+  solution                          = optimize.minimize(fun=mll,x0=[o1,o2,o3,o4,o1,o2,-1],args=df[df.segment==i],method='L-BFGS-B',bounds=((None,None),(None,None),(None,None),(None,None),(None,None),(None,None),(-1,2)))
+  df.loc[df.segment==i, 'mu']       = np.exp(solution.x[2]+solution.x[3]*df.LTV_LR)/(1+np.exp(solution.x[2]+solution.x[3]*df.LTV_LR))
+  df.loc[df.segment==i, 'p0']       = np.exp(solution.x[0]+solution.x[1]*df.LTV_0)/(1+np.exp(solution.x[0]+solution.x[1]*df.LTV_0))
+  df.loc[df.segment==i, 'p1']       = np.exp(solution.x[4]+solution.x[5]*df.LTV_1)/(1+np.exp(solution.x[4]+solution.x[5]*df.LTV_1))
   df.loc[df.segment==i, 'LGD_hat']  = (1-df.p1)*(1-df.p0)*df.mu+df.p1
   print(solution)
   plt.show(plt.plot(df.loc[df.segment==i, 'LGD_hat']))
@@ -43,7 +54,10 @@ for i in df.segment.unique():
 plt.show(plt.scatter(df.LGD_hat, df.Y))
 
 # Output Classic LGD model
-
+print(stat.spearmanr(df.Y,df.mu))
+print(stat.spearmanr(df.Y,df.LGD_hat))
+df['deciles']=np.around(df.LGD_hat,decimals=1)
+print(df.groupby('deciles')['Y'].mean())
 
 # Plot joint distribution LGD and LTV
 
