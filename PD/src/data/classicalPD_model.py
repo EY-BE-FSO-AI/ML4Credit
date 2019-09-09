@@ -210,7 +210,7 @@ def select_sample(observ_df):
     return df
 
 
-def sample_wo_duplicates(observ_df):
+def sample_wo_duplicates(pre_frame):
     """
     Sampling without duplicates.
     Parameters
@@ -414,6 +414,7 @@ def char_bin(Y, X):
 def data_vars(df1, target, max_bin=20, force_bin=3):
     stack = traceback.extract_stack()
     filename, lineno, function_name, code = stack[-2]
+    print(filename, lineno, function_name, code)
     vars_name = re.compile(r'\((.*?)\).*$').search(code).groups()[0]
     final = (re.findall(r"[\w']+", vars_name))[-1]
 
@@ -422,19 +423,22 @@ def data_vars(df1, target, max_bin=20, force_bin=3):
 
     for i in x:
         if i.upper() not in (final.upper()):
-            if np.issubdtype(df1[i], np.number) and len(Series.unique(df1[i])) > 2:
-                conv = mono_bin(target, df1[i], n=max_bin, m=force_bin)
-                conv["VAR_NAME"] = i
-                count = count + 1
-            else:
-                conv = char_bin(target, df1[i])
-                conv["VAR_NAME"] = i
-                count = count + 1
+            try:
+                if np.issubdtype(df1[i], np.number) and len(Series.unique(df1[i])) > 2:
+                    conv = mono_bin(target, df1[i], n=max_bin, m=force_bin)
+                    conv["VAR_NAME"] = i
+                    count = count + 1
+                else:
+                    conv = char_bin(target, df1[i])
+                    conv["VAR_NAME"] = i
+                    count = count + 1
 
-            if count == 0:
-                iv_df = conv
-            else:
-                iv_df = iv_df.append(conv, ignore_index=True)
+                if count == 0:
+                    iv_df = conv
+                else:
+                    iv_df = iv_df.append(conv, ignore_index=True)
+            except:
+                continue
 
     iv = pd.DataFrame({'IV': iv_df.groupby('VAR_NAME').IV.max()})
     iv = iv.reset_index()
@@ -527,7 +531,7 @@ def map_var_to_woe(covariates, coarse_woe):
 def run_model_tests(logit_res, x_test, y_test, covar_list):
     # Create
     X_test_proc = x_test[covar_list]
-    X_test_proc.ModFlag = X_test_proc.ModFlag.replace(['Y', 'N'], [1, 0])  # convert to numeric
+    #X_test_proc.ModFlag = X_test_proc.ModFlag.replace(['Y', 'N'], [1, 0])  # convert to numeric
     X_test_proc[X_test_proc.select_dtypes('category').columns] = X_test_proc.select_dtypes('category').astype(
         'float')  # convert to numeric
     X_test_proc = map_var_to_woe(X_test_proc, coarse_woe)
@@ -570,13 +574,14 @@ if __name__ == "__main__":
 
     # Read the file Performance_HARP.txt: http://www.fanniemae.com/portal/funding-the-market/data/loan-performance-data.html
     performance_frame = read_file(file_name='Data/Performance_HARP.txt', ref_year=['2016', '2017', '2018'],
-                                  lines_to_read=1e6)
+                                  lines_to_read=None)
     # Define your snapshot dates for your observation frame:
     date_list = ['03/01/2016', '06/01/2016', '09/01/2016', '12/01/2016', '03/01/2017', '06/01/2017', '09/01/2017',
                  '12/01/2017']
     pre_frame = pd.concat([create_12mDefault(d, performance_frame) for d in date_list])
     # Sampling
     post_frame = sample_wo_duplicates(pre_frame)
+    #post_frame = pd.read_excel('pd_dataset.xlsx')
     # Train/test split
     X_train, X_test, y_train, y_test = traintest_split(post_frame)
 
@@ -615,8 +620,7 @@ if __name__ == "__main__":
     X_train.Arrears_6m = X_train.Arrears_6m.astype('int').replace(3, 2).astype('category')
 
     # WoE, IV
-    iv, fine_woe, coarse_woe = woeiv_results(df=X_train, dfltvar=y_train['Default'], cont_var=X_cont,
-                                             cat_var=X_cat)  # Drop non-coarsed CLDS in coarse df
+    iv, fine_woe, coarse_woe = woeiv_results(df=X_train, dfltvar=y_train['Default'], cont_var=X_cont, cat_var=X_cat)  # Drop non-coarsed CLDS in coarse df
 
     # selection rule IV > 0.10
     inputs = iv[iv.coarse_IV > 0.1].VAR_NAME.tolist()
@@ -666,6 +670,9 @@ if __name__ == "__main__":
     auc_IS = (1 + gini_IS) / 2
     auc_OsS = (1 + gini_OoS) / 2
 
+    analysis_full, _, gini_full = run_model_tests(results_proc, X_train + X_test, y_train + y_test, covariates_final)  # Out of sample
+    auc_full = (1 + gini_full) / 2
+
     # Write results to excel
     writer = pd.ExcelWriter('classicalPD_IVs.xlsx', engine='xlsxwriter')
     iv.to_excel(writer, sheet_name='IV')
@@ -678,27 +685,27 @@ if __name__ == "__main__":
     analysis_IS.to_excel(writer, sheet_name='AUC_InSample')
     writer.save()
 
-    # # Lorenz curve
-    # plt.plot(analysis_OoS['Cum Bad'], analysis_OoS['Cum Good'], label='Out-of-Sample')
-    # plt.plot(analysis_IS['Cum Bad'], analysis_IS['Cum Good'], label='In-Sample')
-    # diag_line = np.linspace(0, 1, len(analysis_IS))
-    # plt.plot(diag_line, diag_line, linestyle='--', c='red')
-    # # plt.text(0.85, 0.05, 'AUC_IS = {s}%'.format(s=np.round(auc_IS*100, 2)), horizontalalignment='center', verticalalignment='center')
-    # # plt.text(0.90, 0.10, 'AUC_OoS = {s}%'.format(s=np.round(auc_OsS*100, 2)), horizontalalignment='center', verticalalignment='center')
-    # plt.xlabel('Cum bad')
-    # plt.ylabel('Cum good')
-    # plt.title('Lorenz curve')
-    # plt.legend()
-    # plt.show()
-    #
-    # # Plot K-S graph:
-    # analysis_OoS['Cum Bad'].plot(rot=45)
-    # analysis_OoS['Cum Good'].plot(rot=45)
-    # plt.title('Kolmogorov-Smirnov')
-    # plt.legend()
-    # plt.show()
-    # analysis_IS['Cum Bad'].plot(rot=45)
-    # analysis_IS['Cum Good'].plot(rot=45)
-    # plt.title('Kolmogorov-Smirnov')
-    # plt.legend()
-    # plt.show()
+    # Lorenz curve
+    plt.plot(analysis_OoS['Cum Bad'], analysis_OoS['Cum Good'], label='Out-of-Sample')
+    plt.plot(analysis_IS['Cum Bad'], analysis_IS['Cum Good'], label='In-Sample')
+    diag_line = np.linspace(0, 1, len(analysis_IS))
+    plt.plot(diag_line, diag_line, linestyle='--', c='red')
+    # plt.text(0.85, 0.05, 'AUC_IS = {s}%'.format(s=np.round(auc_IS*100, 2)), horizontalalignment='center', verticalalignment='center')
+    # plt.text(0.90, 0.10, 'AUC_OoS = {s}%'.format(s=np.round(auc_OsS*100, 2)), horizontalalignment='center', verticalalignment='center')
+    plt.xlabel('Cum bad')
+    plt.ylabel('Cum good')
+    plt.title('Lorenz curve')
+    plt.legend()
+    plt.show()
+
+    # Plot K-S graph:
+    analysis_OoS['Cum Bad'].plot(rot=45)
+    analysis_OoS['Cum Good'].plot(rot=45)
+    plt.title('Kolmogorov-Smirnov')
+    plt.legend()
+    plt.show()
+    analysis_IS['Cum Bad'].plot(rot=45)
+    analysis_IS['Cum Good'].plot(rot=45)
+    plt.title('Kolmogorov-Smirnov')
+    plt.legend()
+    plt.show()
