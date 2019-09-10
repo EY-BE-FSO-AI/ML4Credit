@@ -9,6 +9,7 @@ Glossary mapping
 import pandas as pd
 import numpy as np
 import re
+import matplotlib.pyplot as plt
 import traceback
 from pandas import Series
 #import matplotlib.pyplot as plt
@@ -420,7 +421,6 @@ if __name__ == "__main__":
     '''
 
     # Collineairty - Correlation:
-    covariates.ModFlag = covariates.ModFlag.replace(['Y', 'N'], [1, 0])  # convert to numeric
     covariates[covariates.select_dtypes('category').columns] = covariates.select_dtypes('category').astype(
         'float')  # convert to numeric
     covariates_corr = covariates.corr()
@@ -459,7 +459,7 @@ if __name__ == "__main__":
     auc_IS = (1 + gini_IS) / 2
     auc_OsS = (1 + gini_OoS) / 2
 
-    analysis_full, _, gini_full = run_model_tests(results_proc, X_train + X_test, y_train + y_test, covariates_final)  # Out of sample
+    analysis_full, _, gini_full = run_model_tests(results_proc, X_train, y_train, covariates_final)  # Out of sample
     auc_full = (1 + gini_full) / 2
 
     # Write results to excel
