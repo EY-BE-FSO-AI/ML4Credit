@@ -36,7 +36,8 @@ perf_type_map = {'LoanID': 'int64', 'Servicer': 'category', 'CurrInterestRate': 
                  'PPRC': 'float32', 'AssetRecCost': 'float32', 'MHEC': 'float32', 'ATFHP': 'float32',
                  'NetSaleProceeds': 'float32', 'CreditEnhProceeds': 'float32', 'RPMWP': 'float32', 'OFP': 'float32',
                  'NIBUPB': 'float32', 'PFUPB': 'float32', 'RMWPF': 'category', 'FPWA': 'float32',
-                 'ServicingIndicator': 'category'}
+                 'ServicingIndicator': 'category', 'Arrears_3m':'category', 'Arrears_6m':'category',
+                 'Arrears_9m':'category', 'Arrears_12m':'category'}
 
 extended_selec_per = col_per
 
@@ -330,7 +331,6 @@ def map_var_to_woe(covariates, coarse_woe):
 def run_model_tests(logit_res, x_test, y_test, covar_list):
     # Create
     X_test_proc = x_test[covar_list]
-    #X_test_proc.ModFlag = X_test_proc.ModFlag.replace(['Y', 'N'], [1, 0])  # convert to numeric
     X_test_proc[X_test_proc.select_dtypes('category').columns] = X_test_proc.select_dtypes('category').astype(
         'float')  # convert to numeric
     X_test_proc = map_var_to_woe(X_test_proc, coarse_woe)
@@ -371,7 +371,12 @@ if __name__ == "__main__":
     Read data and data set creation
     '''
     # Read the shared pd dataset
-    post_frame = pd.read_excel('pd_dataset.xlsx')
+    post_frame = pd.read_excel('pd_dataset.xlsx', index_col=0, dtype=perf_type_map)
+    #Change the ModFlag (Y/N) to binary (1/0).
+    try:
+        post_frame.ModFlag = post_frame.ModFlag.replace(['Y', 'N'], [1, 0])  # convert to numeric
+    except:
+        print('ModFlag not modified.')
     # Train/test split
     X_train, X_test, y_train, y_test = traintest_split(post_frame)
 
@@ -395,8 +400,10 @@ if __name__ == "__main__":
     # List of numeric and categorical variables
     X_cont = X_train.select_dtypes(include=['int64', 'float32', 'float64']).columns.values
     X_cont = np.delete(X_cont, np.where(X_cont == 'Arrears'))
+    X_cont = np.delete(X_cont, np.where(X_cont == 'ModFlag'))
     X_cat = X_train.select_dtypes(include=['category']).columns.values
     X_cat = np.delete(X_cat, np.where(X_cat == 'MSA'))  # Remove MSA for the moment
+    X_cat = np.append(X_cat, ['ModFlag'])
 
     # Replace missing values: numeric/continious -> mean, category -> mode
     col_fill_mean = X_train[X_cont].columns[X_train[X_cont].isnull().mean() > 0]
@@ -405,9 +412,9 @@ if __name__ == "__main__":
     X_train[col_fill_mode] = X_train[col_fill_mode].fillna(X_train[col_fill_mode].mode())
 
     # Additional:
-    X_train.Arrears_6m = X_train.Arrears_6m.astype('int').replace(5, 4).astype('category')
-    X_train.Arrears_6m = X_train.Arrears_6m.astype('int').replace(4, 3).astype('category')
-    X_train.Arrears_6m = X_train.Arrears_6m.astype('int').replace(3, 2).astype('category')
+    # X_train.Arrears_6m = X_train.Arrears_6m.astype('int').replace(5, 4).astype('category')
+    # X_train.Arrears_6m = X_train.Arrears_6m.astype('int').replace(4, 3).astype('category')
+    # X_train.Arrears_6m = X_train.Arrears_6m.astype('int').replace(3, 2).astype('category')
 
     # WoE, IV
     iv, fine_woe, coarse_woe = woeiv_results(df=X_train, dfltvar=y_train['Default'], cont_var=X_cont, cat_var=X_cat)  # Drop non-coarsed CLDS in coarse df
@@ -474,27 +481,27 @@ if __name__ == "__main__":
     analysis_IS.to_excel(writer, sheet_name='AUC_InSample')
     writer.save()
 
-    # Lorenz curve
-    plt.plot(analysis_OoS['Cum Bad'], analysis_OoS['Cum Good'], label='Out-of-Sample')
-    plt.plot(analysis_IS['Cum Bad'], analysis_IS['Cum Good'], label='In-Sample')
-    diag_line = np.linspace(0, 1, len(analysis_IS))
-    plt.plot(diag_line, diag_line, linestyle='--', c='red')
-    # plt.text(0.85, 0.05, 'AUC_IS = {s}%'.format(s=np.round(auc_IS*100, 2)), horizontalalignment='center', verticalalignment='center')
-    # plt.text(0.90, 0.10, 'AUC_OoS = {s}%'.format(s=np.round(auc_OsS*100, 2)), horizontalalignment='center', verticalalignment='center')
-    plt.xlabel('Cum bad')
-    plt.ylabel('Cum good')
-    plt.title('Lorenz curve')
-    plt.legend()
-    plt.show()
-
-    # Plot K-S graph:
-    analysis_OoS['Cum Bad'].plot(rot=45)
-    analysis_OoS['Cum Good'].plot(rot=45)
-    plt.title('Kolmogorov-Smirnov')
-    plt.legend()
-    plt.show()
-    analysis_IS['Cum Bad'].plot(rot=45)
-    analysis_IS['Cum Good'].plot(rot=45)
-    plt.title('Kolmogorov-Smirnov')
-    plt.legend()
-    plt.show()
+    # # Lorenz curve
+    # plt.plot(analysis_OoS['Cum Bad'], analysis_OoS['Cum Good'], label='Out-of-Sample')
+    # plt.plot(analysis_IS['Cum Bad'], analysis_IS['Cum Good'], label='In-Sample')
+    # diag_line = np.linspace(0, 1, len(analysis_IS))
+    # plt.plot(diag_line, diag_line, linestyle='--', c='red')
+    # # plt.text(0.85, 0.05, 'AUC_IS = {s}%'.format(s=np.round(auc_IS*100, 2)), horizontalalignment='center', verticalalignment='center')
+    # # plt.text(0.90, 0.10, 'AUC_OoS = {s}%'.format(s=np.round(auc_OsS*100, 2)), horizontalalignment='center', verticalalignment='center')
+    # plt.xlabel('Cum bad')
+    # plt.ylabel('Cum good')
+    # plt.title('Lorenz curve')
+    # plt.legend()
+    # plt.show()
+    #
+    # # Plot K-S graph:
+    # analysis_OoS['Cum Bad'].plot(rot=45)
+    # analysis_OoS['Cum Good'].plot(rot=45)
+    # plt.title('Kolmogorov-Smirnov')
+    # plt.legend()
+    # plt.show()
+    # analysis_IS['Cum Bad'].plot(rot=45)
+    # analysis_IS['Cum Good'].plot(rot=45)
+    # plt.title('Kolmogorov-Smirnov')
+    # plt.legend()
+    # plt.show()
