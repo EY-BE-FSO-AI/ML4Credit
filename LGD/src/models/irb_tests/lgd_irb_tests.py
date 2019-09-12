@@ -171,3 +171,63 @@ class gAUC(object):
         s = (1 / w_r ** 2) * np.sqrt(s_rhs)
 
         return gAUC, s
+
+
+class matrix(object):
+
+    def check_square(self, M):
+        # Check whether matrix MemoryError is square
+        result = True if M.shape[0] == M.shape[1] else False
+        return result
+
+    def square(self, M):
+        # Make matrix square in case it is not
+        if self.check_square(M) == False:
+            r = M.shape[0]  # Number of rows
+            c = M.shape[1]  # Number of columns
+            m = max(r, c)  # Maximum between rows and columns
+            for i in M.index:
+                if i not in M.columns:
+                    M[i] = [0] * len(M.index)
+            for j in M.columns:
+                if j not in M.index:
+                    M.loc[j, :] = [0] * len(M.columns)
+            M = M.sort_index(axis=0).sort_index(axis=1)
+        return M
+
+    ###Calculate observations for a 2D matrix###
+    def matrix_obs(self, data, x, y, z):
+        # x: variable used to create the rows of the matrix
+        # y: variable used to create the columns of the matrix
+        # z: variable used to calculate the sum per cell of the matrix
+        if y == 'Bin_PD':
+            matrix = data[data[z] == 0].groupby([x, y]).size().unstack(fill_value=0)
+            matrix["dflt"] = data[data[z] == 1].groupby([x]).size()
+            matrix["hiii"] = len(matrix.index) * [0]  # Placeholder for pt h.iii in 2.5.1
+            matrix["hiv"] = len(matrix.index) * [0]  # Placeholder for pt h.iv in 2.5.1
+            if matrix.sum(axis=1).sum() != len(data):
+                raise ValueError("Transition Matrix customer number different from total customer number.")
+        else:
+            matrix = data.groupby([x, y]).size().unstack(fill_value=0)
+            matrix = self.square(matrix)
+        return matrix
+
+    def matrix_prob(self, matrix):
+        # matrix: the returned value of the matrix_obs function
+        matrix_ = matrix.div(matrix.sum(axis=1), axis=0)
+        return matrix_.fillna(0)
+
+def cut(array, bins):
+    labels = ['({b0}, {b1}]'.format(b0=b[0], b1=b[1]) for b in bins]
+    intervals = [pd.Interval(*b) for b in bins]
+
+    categories = []
+    for value in array:
+        cat = None
+        for i, interval in enumerate(intervals):
+            if value in interval:
+                cat = labels[i]
+                break
+        categories.append(cat)
+
+    return categories
