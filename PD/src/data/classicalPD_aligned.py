@@ -8,6 +8,7 @@ Glossary mapping
 
 import pandas as pd
 import numpy as np
+import seaborn as sns
 import re
 import matplotlib.pyplot as plt
 import traceback
@@ -365,18 +366,16 @@ def run_model_tests(logit_res, x_test, y_test, covar_list):
     gini = 1 - auc
     return analysis_df, auc, gini
 
-
-
 if __name__ == "__main__":
 
     '''
     Read data and data set creation
     '''
     # Read the shared Train/test split
-    X_train = pd.read_csv('X_train_dataset.csv', index_col=0, dtype=perf_type_map)
-    X_test = pd.read_csv('X_validation_dataset.csv', index_col=0, dtype=perf_type_map)
-    y_train = pd.read_csv('y_train_dataset.csv', index_col=0, dtype=perf_type_map, names=['Default'])
-    y_test = pd.read_csv('y_validation_dataset.csv', index_col=0, dtype=perf_type_map, names=['Default'])
+    X_train = pd.read_csv('Data/X_train_dataset.csv', index_col=0, dtype=perf_type_map)
+    X_test = pd.read_csv('Data/X_validation_dataset.csv', index_col=0, dtype=perf_type_map)
+    y_train = pd.read_csv('Data/y_train_dataset.csv', index_col=0, dtype=perf_type_map, names=['Default'])
+    y_test = pd.read_csv('Data/y_validation_dataset.csv', index_col=0, dtype=perf_type_map, names=['Default'])
 
     try:
         # convert ModFlag to numeric
@@ -465,6 +464,38 @@ if __name__ == "__main__":
     covariates_final = results.pvalues[results.pvalues < 0.01].index.tolist()
     logit_model_proc, results_proc = run_logit(y_train, covariates_woe[covariates_final])
 
+    # # Save the model inputes (i.e. WOEs), default flag and outputs (i.e. PDs) to a separate .xlsx file.
+    # X_train_proc = X_train[covariates_final]
+    # X_train_proc[X_train_proc.select_dtypes('category').columns] = X_train_proc.select_dtypes('category').astype('float')  # convert to numeric
+    # X_train_proc = map_var_to_woe(X_train_proc, coarse_woe)
+    # X_train_proc = X_train_proc.add_suffix('_WOE') # Add WOE as suffix.
+    #
+    # pred_train = pd.DataFrame({"Prediction": results_proc.predict(X_train_proc)})
+    #
+    # X_test_proc = X_test[covariates_final]
+    # X_test_proc[X_test_proc.select_dtypes('category').columns] = X_test_proc.select_dtypes('category').astype('float')  # convert to numeric
+    # X_test_proc = map_var_to_woe(X_test_proc, coarse_woe)
+    # X_test_proc = X_train_proc.add_suffix('_WOE')  # Add WOE as suffix.
+    #
+    # pred_test = pd.DataFrame({"Prediction": results_proc.predict(X_test_proc)})
+    #
+    # df_results_train = pd.concat([X_train_proc, y_train, pred_train], axis=1)
+    # df_results_test = pd.concat([X_test_proc, y_test, pred_test], axis=1)
+    #
+    # writer = pd.ExcelWriter('model_results.xlsx', engine='xlsxwriter')
+    #
+    # df_results_train.to_excel(writer, sheet_name='Train')
+    # df_results_test.to_excel(writer, sheet_name='Test')
+    # writer.save()
+    # writer.close()
+
+    # Write parameters to Excel
+    writer = pd.ExcelWriter('coefficients.xlsx', engine='xlsxwriter')
+    df_coefficients = pd.DataFrame({"Coefficients" : results.params})
+    df_coefficients.to_excel(writer, sheet_name='Coefficients')
+    writer.save()
+    writer.close()
+
     # Summary of analysis
     analysis_IS, _, gini_IS = run_model_tests(results_proc, X_train, y_train, covariates_final)  # Out of sample
     analysis_OoS, _, gini_OoS = run_model_tests(results_proc, X_test, y_test, covariates_final)  # Out of sample
@@ -485,26 +516,37 @@ if __name__ == "__main__":
     analysis_OoS.to_excel(writer, sheet_name='AUC_OutofSample')
     analysis_IS.to_excel(writer, sheet_name='AUC_InSample')
     writer.save()
+    writer.close()
+
+    """
+        Set the plotting stats.
+    """
+    sns.set()
+    sns.set_context("paper", font_scale=1.5)
+    sns.set_style("darkgrid", {'font.family': ['EYInterstate']})
 
     # Lorenz curve
-    plt.plot(analysis_OoS['Cum Bad'], analysis_OoS['Cum Good'], label='Out-of-Sample')
-    plt.plot(analysis_IS['Cum Bad'], analysis_IS['Cum Good'], label='In-Sample')
+    plt.figure(1)
+    plt.plot(analysis_OoS['Cum Bad'], analysis_OoS['Cum Good'], label='Validation set' + ' (area = %0.2f)' % auc_OsS)
+    #plt.plot(analysis_IS['Cum Bad'], analysis_IS['Cum Good'], label='In-Sample')
     diag_line = np.linspace(0, 1, len(analysis_IS))
     plt.plot(diag_line, diag_line, linestyle='--', c='red')
     # plt.text(0.85, 0.05, 'AUC_IS = {s}%'.format(s=np.round(auc_IS*100, 2)), horizontalalignment='center', verticalalignment='center')
     # plt.text(0.90, 0.10, 'AUC_OoS = {s}%'.format(s=np.round(auc_OsS*100, 2)), horizontalalignment='center', verticalalignment='center')
-    plt.xlabel('Cum bad')
-    plt.ylabel('Cum good')
+    plt.xlabel('Cumulative bad')
+    plt.ylabel('Cumulative good')
     plt.title('Lorenz curve')
     plt.legend()
     plt.show()
 
     # Plot K-S graph:
+    plt.figure(2)
     analysis_OoS['Cum Bad'].plot(rot=45)
     analysis_OoS['Cum Good'].plot(rot=45)
     plt.title('Kolmogorov-Smirnov')
     plt.legend()
     plt.show()
+    plt.figure(3)
     analysis_IS['Cum Bad'].plot(rot=45)
     analysis_IS['Cum Good'].plot(rot=45)
     plt.title('Kolmogorov-Smirnov')
