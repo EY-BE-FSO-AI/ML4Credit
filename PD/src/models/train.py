@@ -24,7 +24,7 @@ import warnings
 from sklearn.ensemble import BaggingClassifier
 from sklearn.calibration import CalibratedClassifierCV
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import lime
 import matplotlib.pyplot as plt
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix, auc, precision_recall_curve
@@ -37,22 +37,23 @@ from catboost.utils import get_roc_curve
 from sklearn.preprocessing import power_transform
 from scipy import stats
 import seaborn as sns
-	
-# Arrears_9m is highly correlated with Arrears_12m
-# CLDS is highly correlated with Arrears
+from catboost import cv
+from catboost import Pool
 
-categorical_features = ['ServicingIndicator', 'AdMonthsToMaturity', 'RMWPF', 'Servicer', 'ZeroBalCode', 'ModFlag']
 
-numerical_features = [ 'Arrears', 'Arrears_12m', 'Arrears_3m', 'Arrears_6m', 'Arrears_9m', 'CAUPB', 'CurrInterestRate', 'LoanAge', 'MonthsToMaturity', 'MSA', 'NIBUPB']
+categorical_features = ['ServicingIndicator',  'RMWPF', 'Servicer', 'ZeroBalCode', 'ModFlag', 'MSA']
+
+numerical_features = [ 'CLDS', 'AdMonthsToMaturity', 'Arrears', 'Arrears_12m', 'Arrears_3m', 'Arrears_6m', 'Arrears_9m', 'CAUPB', 'CurrInterestRate', 'LoanAge', 'MonthsToMaturity', 'NIBUPB']
 
 date_features = ['ZeroBalDate', 'MaturityDate', 'MonthRep']
 
 useless_features  =['CreditEnhProceeds', 'OFP', 'NetSaleProceeds', 'ATFHP', 'MHEC', 'AssetRecCost', 'PPRC', 'ForeclosureCosts', 'FPWA', 'LastInstallDate', 'ForeclosureDate', 'DispositionDate', 'PFUPB', 'RPMWP']
 
 bool_features = []
+
 target_column = 'Default'
 id_column = 'LoanID'
-random_seed = 1
+RANDOM_SEED = 1
 
 
 def concat_features(df_text_features, df_numerical_features, df_cat_features):
@@ -91,19 +92,32 @@ def replace_missing_values(df):
 def ad_hoc_features_transformations(df):
     global numerical_features
     global categorical_features
-    df['NIBUPB_yeojohnson'] = stats.yeojohnson(df['NIBUPB'])[0]
-    df['CAUPB_yeojohnson'] =  stats.yeojohnson(df['CAUPB'])[0]
+    #df['NIBUPB_yeojohnson'] = stats.yeojohnson(df['NIBUPB'])[0]
+    #df['CAUPB_yeojohnson'] =  stats.yeojohnson(df['CAUPB'])[0]
+    #df['AdMonthsToMaturity_yeojohnson'] =  stats.yeojohnson(df['AdMonthsToMaturity'])[0]
 
     df_ZeroBalDate_dt = pd.DataFrame({'Date':pd.to_datetime(df['ZeroBalDate'].values, format='%m/%Y')})
     df['ZeroBalDate_day_of_year'] = df_ZeroBalDate_dt['Date'].dt.dayofyear
+    df['ZeroBalDate_day_of_week'] = df_ZeroBalDate_dt['Date'].dt.dayofweek
+    df['ZeroBalDate_month'] = df_ZeroBalDate_dt['Date'].dt.month
+    df['ZeroBalDate_year'] = df_ZeroBalDate_dt['Date'].dt.year
 
     df_MaturityDate_dt = pd.DataFrame({'Date':pd.to_datetime(df['MaturityDate'].values, format='%m/%Y')})
     df['MaturityDate_day_of_year'] = df_MaturityDate_dt['Date'].dt.dayofyear
+    df['MaturityDate_day_of_week'] = df_MaturityDate_dt['Date'].dt.dayofweek
+    df['MaturityDate_month'] = df_MaturityDate_dt['Date'].dt.month
+    df['MaturityDate_year'] = df_MaturityDate_dt['Date'].dt.year
 
     df_MonthRep_dt = pd.DataFrame({'Date':pd.to_datetime(df['MonthRep'].values, format='%d/%m/%Y')})
     df['MonthRep_day_of_year'] = df_MonthRep_dt['Date'].dt.dayofyear
+    df['MonthRep_day_of_week'] = df_MonthRep_dt['Date'].dt.dayofweek
+    df['MonthRep_month'] = df_MonthRep_dt['Date'].dt.month
+    df['MonthRep_year'] = df_MonthRep_dt['Date'].dt.year
     
-    new_features = ['NIBUPB_yeojohnson', 'CAUPB_yeojohnson', 'ZeroBalDate_day_of_year', 'MaturityDate_day_of_year', 'MonthRep_day_of_year']
+    new_features = ['ZeroBalDate_day_of_year', 'MaturityDate_day_of_year', 'MonthRep_day_of_year', 
+    'ZeroBalDate_month', 'ZeroBalDate_year', 'MaturityDate_month', 'MaturityDate_year', 'MonthRep_month', 'MonthRep_year', 'ZeroBalDate_day_of_week', 
+    'MaturityDate_day_of_week', 'MonthRep_day_of_week']
+        
     return df, new_features
 
 
@@ -211,34 +225,33 @@ def plot_PR(y_labels,y_pred, i=0):
     plt.savefig('.\\pr_curve_%d.png'%(i), bbox_inches='tight')
     return fig
 
-
-def train_model(X_train, y_train, X_validation, y_validation, categorical_features_pos, use_proba_calibration=False):
-    
-    print ('-----------------------------------  Training ...')
-    unique_elements, counts_elements = np.unique(y_train, return_counts=True)
+def get_class_weights(y):
+    unique_elements, counts_elements = np.unique(y, return_counts=True)
     c_label = {}
     for ue, f in zip(unique_elements, counts_elements):
         c_label[ue] = f
     
     class_weights = [1, c_label[0]*1.0/c_label[1]]
-    scale_pos_weight = c_label[0]*1.0/c_label[1]
-    sample_weights = compute_sample_weight(class_weight='balanced', y=y_train)
-	
     print ('Class weights: ', class_weights)
-    
+    return class_weights
+
+def train_model(X_train, y_train, X_validation, y_validation, categorical_features_pos, use_proba_calibration=False, random_seed=RANDOM_SEED, golden_features_pos=[]):
+    print ('-----------------------------------  Training ...')
     model = CatBoostClassifier(
-        iterations=2000,
-        learning_rate=0.1,
-        depth=5,
+        #n_estimators=700,
+        #learning_rate=0.1,
+        depth=4,
         loss_function='Logloss',
         random_seed=random_seed,
-        class_weights=class_weights,
-        eval_metric = 'F1', 
+        class_weights=get_class_weights(y_train),
+        eval_metric = 'AUC', 
         custom_metric=['F1', 'Precision', 'Recall', 'AUC:hints=skip_train~false'],
         boosting_type='Plain',
-        od_pval=0.0001,
+        od_type='Iter',
+        #od_pval=0.000001,
         od_wait=20,
-        thread_count=8
+        thread_count=8,
+        per_float_feature_quantization=['%i:border_count=1024'%pos for pos in golden_features_pos]
     )
 	
     model.fit(
@@ -247,7 +260,7 @@ def train_model(X_train, y_train, X_validation, y_validation, categorical_featur
         cat_features=categorical_features_pos,
         eval_set=(X_validation, y_validation),
         use_best_model=True,
-        early_stopping_rounds=200,
+        early_stopping_rounds=100,
         verbose=True,
 	)
     print('Model is fitted: ' + str(model.is_fitted()))
@@ -261,7 +274,7 @@ def main():
     parser = optparse.OptionParser()
 
     parser.add_option('--data-file',
-                      default='../data/pd_dataset.xlsx',  #'../data/perf_data_sel.csv'
+                      default='../data/pd_dataset.xlsx',  
                       dest='data_file',
                       help="Path to the branches info csv dataset. Default: %default."
                     )
@@ -324,7 +337,7 @@ def main():
         X, X_validation, y, y_validation = train_test_split(data_df, 
                                                             data_df[target_column], 
                                                             train_size=0.8, 
-                                                            random_state=random_seed, 
+                                                            random_state=RANDOM_SEED, 
                                                             stratify=data_df[target_column]
                                                            )
         print ('X shape: ', X.shape)
@@ -343,6 +356,12 @@ def main():
     X = X.drop(useless_features, axis=1)
     X_validation = X_validation.drop(useless_features, axis=1)
 
+    # remove outlier
+    y = y.drop(X[X.LoanAge < 0].index)
+    X = X.drop(X[X.LoanAge < 0].index)
+    y_validation = y_validation.drop(X_validation[X_validation.LoanAge < 0].index)
+    X_validation = X_validation.drop(X_validation[X_validation.LoanAge < 0].index)
+
     # --------------------------------------------------------------------------------------
     # Replace missing values
     # --------------------------------------------------------------------------------------
@@ -356,7 +375,6 @@ def main():
     print ('Check for duplicate records: ', X.duplicated().sum())
     
 
-
     # --------------------------------------------------------------------------------------
     # Features engineering
     # --------------------------------------------------------------------------------------
@@ -364,11 +382,11 @@ def main():
     X, new_features = ad_hoc_features_transformations(X)    
     X_validation, _ = ad_hoc_features_transformations(X_validation)    
     numerical_features = numerical_features + new_features
+    
 
     # --------------------------------------------------------------------------------------
     # Create correlation graph
     # --------------------------------------------------------------------------------------
-
     print ('Correlation matrix')
     plt.figure(figsize=(16,16))
     sns.heatmap(X.corr(), annot=True, fmt=".2f")
@@ -385,7 +403,6 @@ def main():
     # --------------------------------------------------------------------------------------
     # Fix dataset shape
     # --------------------------------------------------------------------------------------
-    
     X = X[numerical_features + categorical_features]
     X_validation = X_validation[numerical_features + categorical_features]
     print ('New features: ', new_features)
@@ -399,100 +416,133 @@ def main():
     # --------------------------------------------------------------------------------------
     X = X[numerical_features + categorical_features]
     X_validation = X_validation[numerical_features + categorical_features]
+
+    # --------------------------------------------------------------------------------------
+    # Train model
+    # --------------------------------------------------------------------------------------
+
+    categorical_features_pos = np.where(X.dtypes == np.object)[0]
+
+    # --------------------------------------------------------------------------------------
+    # Scaling numerical features
+    # --------------------------------------------------------------------------------------
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    X[numerical_features] = scaler.fit_transform(X[numerical_features])
+    X_validation[numerical_features] = scaler.transform(X_validation[numerical_features])
     
+    # --------------------------------------------------------------------------------------
+    # Building the model
+    # --------------------------------------------------------------------------------------
+    print ('Features: ', X.columns)
+                       
+    predictions_validation = []
+    predictions_train = []
+    features_scores = {}
+
+    for i in range(10):
+        model = train_model(X_train=X,
+                            y_train=y,
+                            X_validation=X_validation,
+                            y_validation=y_validation,
+                            use_proba_calibration=options.use_proba_calibration,
+                            categorical_features_pos=categorical_features_pos,
+                            random_seed=i,
+                            golden_features_pos = [X.columns.get_loc('LoanAge'), X.columns.get_loc('CLDS')]
+                           )
+        predictions_validation.append(model.predict_proba(X_validation)[:,1])
+        predictions_train.append(model.predict_proba(X)[:,1])
+        train_score = model.score(X, y) # train score
+        validation_score = model.score(X_validation, y_validation) # validation score
+        print ('####################### train score: ', train_score)
+        print ('####################### validation score: ', validation_score)
+        print ('####################### model best score: ', model.get_best_score())
+
+        # features importance
+        feature_score = pd.DataFrame(list(zip(X.dtypes.index, model.get_feature_importance(Pool(X, label=y, cat_features=categorical_features_pos)))), columns=['Feature','Score'])
+        feature_score = feature_score.sort_values(by='Score', ascending=False, inplace=False, kind='quicksort', na_position='last')
+        print ('feature_score: ', feature_score.head(20))
+        for f, s in zip(feature_score.Feature, feature_score.Score): 
+            if f in features_scores:
+                features_scores[f] += s
+            else:
+                features_scores[f] = s
+
+    # avg features score
+    avg_feature_score = pd.DataFrame({k: v/i for k, v in features_scores.items()}, columns=['Feature','Score']) 
+    avg_feature_score = avg_feature_score.sort_values(by='Score', ascending=False, inplace=False, kind='quicksort', na_position='last')
+    avg_feature_score.to_csv('favg_feature_score.csv')
+
+    # avg perf
+    predictions_train = np.mean(predictions_train, axis=0)
+    predictions_validation = np.mean(predictions_validation, axis=0)
+    print ('predictions_train: ', predictions_train)
+    print ('predictions_validation: ', predictions_validation)
+    pd.DataFrame({'predictions_train': predictions_train}).to_csv('predictions_train.csv')
+    pd.DataFrame({'predictions_validation': predictions_validation}).to_csv('predictions_validation.csv')
+
+    prfs = precision_recall_fscore_support(y_validation.values, predictions_validation>=0.5, average='binary')
+    print ('prfs: ', prfs)
+    fpr, tpr, thresholds = metrics.roc_curve(y_validation, predictions_validation)
+    roc_auc = metrics.auc(fpr, tpr)
+    accuracy = metrics.accuracy_score(y_validation, predictions_validation >= 0.5, normalize=True, sample_weight=None)
+    print('AUC = %f' % roc_auc)
+    print('precision_recall_fscore_support: ', prfs)
+    print('Accuracy: ', accuracy)
+
+    # --------------------------------------------------------------------------------------
+    # ROC & PR curves
+    # --------------------------------------------------------------------------------------
+    plot_ROC(y_validation, predictions_validation, 0)
+    plot_PR(y_validation, predictions_validation, 0)
+
+    if not options.run_cross_validation:
+        exit()
+        
     # --------------------------------------------------------------------------------------
     # Cross validate using the best found classifier
     # --------------------------------------------------------------------------------------
-    if options.run_cross_validation:
-        print ('## Running cross validation with the selected best estimator')
-        sss = StratifiedKFold(n_splits=2, random_state=random_seed, shuffle=False)
-        results = {'auc': [], 'accuracy':[], 'precision': [], 'recall': []}
- 
-        for i, (train_index, test_index) in enumerate(sss.split(X=X, y=y)):
-            print ('\n\nRunning cross validation: ', i)
-            X_train = X.iloc[train_index]
-            X_test = X.iloc[test_index]
+    params = {
+        #'learning_rate':0.1,
+        'depth': 4,
+        'loss_function': 'Logloss',
+        'random_seed': RANDOM_SEED,
+        'class_weights' : get_class_weights(y),
+        'eval_metric': 'F1', 
+        'custom_metric': ['F1', 'Precision', 'Recall', 'AUC:hints=skip_train~false'],
+        'boosting_type': 'Plain',
+        'od_type':'Iter',
+        #od_pval=0.000001,
+        'od_wait':20,
+        'thread_count':8,
+        'per_float_feature_quantization' : ['%i:border_count=1024'%pos for pos in [X.columns.get_loc('LoanAge'), X.columns.get_loc('CLDS')]]
+        }
 
-            y_train = y.iloc[train_index]
-            y_test = y.iloc[test_index]
-			
-            print ('DF train: ', X_train.shape)
-            print ('DF test: ', X_test.shape)
+    
+    def print_cv_summary(cv_data):
+        print ('cv_data: ', cv_data.head(10))
 
-            df_train_stacked_features = X_train[numerical_features + categorical_features]
-            df_test_stacked_features = X_test[numerical_features + categorical_features]
-            categorical_features_pos = np.where(df_train_stacked_features.dtypes == np.object)[0]
-            print ('df_train_stacked_features: ', df_train_stacked_features.head(2))
-            print ('categorical_features_pos: ', categorical_features_pos)
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            df_train_stacked_features[numerical_features] = scaler.fit_transform(df_train_stacked_features[numerical_features])
-            df_test_stacked_features[numerical_features] = scaler.transform(df_test_stacked_features[numerical_features])
-			
-            # --------------------------------------------------------------------------------------
-            # Building the model
-            # --------------------------------------------------------------------------------------
-            print ('df_train_stacked_features shape: ', df_train_stacked_features.shape)
-            print ('df_test_stacked_features shape: ', df_test_stacked_features.shape)
-            print ('y train shape: ', y_train.shape)
-            print ('y test shape: ', y_test.shape)
+        best_value = cv_data['test-Logloss-mean'].min()
+        best_iter = cv_data['test-Logloss-mean'].values.argmin()
 
-            print ('Features: ', X_train.columns)
-            model = train_model(X_train=df_train_stacked_features,
-                              y_train=y_train,
-							  X_validation=df_test_stacked_features,
-							  y_validation=y_test,
-                              use_proba_calibration=options.use_proba_calibration,
-							  categorical_features_pos=categorical_features_pos
-                              )
-            train_score = model.score(df_train_stacked_features, y_train) # train score
-            test_score = model.score(df_test_stacked_features, y_test) # test score
-			
-            print ('####################### train acc: ', train_score)
-            print ('####################### test acc: ', test_score)
-            print ('####################### best score: ', model.get_best_score())
-			
-            print ('Generating shap summary plot ...')
-            #import shap
-            #shap.initjs()
-            #explainer = shap.TreeExplainer(model)
-            #shap_values = explainer.shap_values(df_train_stacked_features[numerical_features + categorical_features])
-            #shap.summary_plot(shap_values, df_train_stacked_features[numerical_features + categorical_features])
-            #plt.savefig('shap_summary.png')
-            feature_score = pd.DataFrame(list(zip(df_train_stacked_features.dtypes.index, model.get_feature_importance(Pool(df_train_stacked_features, label=y_train, cat_features=categorical_features_pos)))), columns=['Feature','Score'])
-            feature_score = feature_score.sort_values(by='Score', ascending=False, inplace=False, kind='quicksort', na_position='last')
-            print ('feature_score: ', feature_score.head(20))
-            print ('Training done ...')
-            val_pred = model.predict(df_test_stacked_features)
-            print('val_pred: ', val_pred)
-            val_prob = model.predict_proba(df_test_stacked_features)
-            print('val prob: ', [val_prob])
-            all_probas = pd.DataFrame(val_prob, columns=[0, 1])
-            pred_proba = all_probas[1]
-            
-            prfs = precision_recall_fscore_support(y_test.values, val_pred, average='binary')
-            print ('prfs: ', prfs)
-            fpr, tpr, thresholds = metrics.roc_curve(y_test, pred_proba)
-            roc_auc = metrics.auc(fpr, tpr)
-            accuracy = metrics.accuracy_score(y_test, pred_proba >= 0.5, normalize=True, sample_weight=None)
-            results['recall'].append(prfs[1])
-            results['precision'].append(prfs[0])
-            results['auc'].append(roc_auc)
-            results['accuracy'].append(accuracy)
-            print('AUC = %f' % roc_auc)
-            print('precision_recall_fscore_support: ', prfs)
-            print('Accuracy: ', accuracy)
-            # --------------------------------------------------------------------------------------
-            # ROC & PR curves
-            # --------------------------------------------------------------------------------------
-            plot_ROC(y_test, pred_proba, i)
-            plot_PR(y_test, pred_proba, i)
-			
+        print('Best validation Logloss score : {:.4f}±{:.4f} on step {}'.format(
+            best_value,
+            cv_data['test-Logloss-std'][best_iter],
+            best_iter)
+        )
 
-        print ('Results: ', results)
-        print ('Avg auc: ', np.average(results['auc']))
-        print ('Avg accuracy: ', np.average(results['accuracy']))
-        print ('Avg recall: ', np.average(results['recall']))
-        print ('Avg precision: ', np.average(results['precision']))
+    cv_data = cv(
+        params = params,
+        pool = Pool(data=X, label=y, cat_features=categorical_features_pos, has_header=True),
+        fold_count=10,
+        shuffle=True,
+        partition_random_seed=0,
+        plot=False,
+        stratified=True,
+        verbose=True        
+    )
+    
+    print_cv_summary(cv_data)
+    cv_data.to_csv('cv_data.csv')
 
 
 if __name__ == "__main__":
