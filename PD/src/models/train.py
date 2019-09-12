@@ -199,7 +199,7 @@ def plot_ROC(y_labels,y_pred, i=0):
     plt.ylabel('True Positive Rate',fontsize=14)
     plt.title('Receiver operating characteristic',fontsize=16)
     plt.legend(loc="lower right",fontsize=14)
-    plt.savefig('.\\roc_curve_%d.png'%(i), bbox_inches='tight')
+    plt.savefig('roc_curve_%d.png'%(i), bbox_inches='tight')
     return fig
 
 def plot_PR(y_labels,y_pred, i=0):
@@ -222,7 +222,7 @@ def plot_PR(y_labels,y_pred, i=0):
     plt.xlabel('Recall',fontsize=14)
     plt.ylabel('Precision',fontsize=14)
     plt.title('Precision vs. Recall',fontsize=16)
-    plt.savefig('.\\pr_curve_%d.png'%(i), bbox_inches='tight')
+    plt.savefig('pr_curve_%d.png'%(i), bbox_inches='tight')
     return fig
 
 def get_class_weights(y):
@@ -466,19 +466,20 @@ def main():
                 features_scores[f] += s
             else:
                 features_scores[f] = s
+        print ('features_scores: ', features_scores)
 
     # avg features score
-    avg_feature_score = pd.DataFrame({k: v/i for k, v in features_scores.items()}, columns=['Feature','Score']) 
+    avg_feature_score = pd.DataFrame.from_dict({k: v/i for k, v in features_scores.items()}, orient='index', columns=['Score']) 
     avg_feature_score = avg_feature_score.sort_values(by='Score', ascending=False, inplace=False, kind='quicksort', na_position='last')
-    avg_feature_score.to_csv('favg_feature_score.csv')
+    avg_feature_score.to_csv('avg_feature_score.csv')
 
     # avg perf
     predictions_train = np.mean(predictions_train, axis=0)
     predictions_validation = np.mean(predictions_validation, axis=0)
     print ('predictions_train: ', predictions_train)
     print ('predictions_validation: ', predictions_validation)
-    pd.DataFrame({'predictions_train': predictions_train}).to_csv('predictions_train.csv')
-    pd.DataFrame({'predictions_validation': predictions_validation}).to_csv('predictions_validation.csv')
+    pd.DataFrame({'pb_default': predictions_train}).to_csv('predictions_train.csv')
+    pd.DataFrame({'pb_default': predictions_validation}).to_csv('predictions_validation.csv')
 
     prfs = precision_recall_fscore_support(y_validation.values, predictions_validation>=0.5, average='binary')
     print ('prfs: ', prfs)
