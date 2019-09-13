@@ -42,10 +42,13 @@ for i in df.segment.unique():
   o5    = pd.DataFrame(lr.coef_)[1]
   o6    = lr.intercept_
   dummy = df.Y[(df.segment==i) & (~df.Y.isin([0,1]))]
-  lm    = ln.LinearRegression().fit(df.LTV_LR[(df.segment==i) & (~df.Y.isin([0,1]))].values.reshape(-1,1), np.log(dummy/(1-dummy)))
-  o3    = lm.coef_
-  o4    = lm.intercept_
-  solution                          = optimize.minimize(fun=mll,x0=[o1,o2,o3,o4,o5,o6,-1],args=df[df.segment==i],method='L-BFGS-B',bounds=((None,None),(None,None),(None,None),(None,None),(None,None),(None,None),(-1,2)))
+  if dummy.count()>0:
+  	lm    = ln.LinearRegression().fit(df.LTV_LR[(df.segment==i) & (~df.Y.isin([0,1]))].values.reshape(-1,1), np.log(dummy/(1-dummy)))
+  	o3    = lm.coef_
+  	o4    = lm.intercept_
+  else:
+        o3=0; o4=0;
+  solution                          = optimize.minimize(fun=mll,x0=[o1,o2,o3,o4,o5,o6,-1],args=df[(df.segment==i) & (df.training==1)],method='L-BFGS-B',bounds=((None,None),(None,None),(None,None),(None,None),(None,None),(None,None),(-1,2)))
   df.loc[df.segment==i, 'mu']       = np.exp(solution.x[2]+solution.x[3]*df.LTV_LR)/(1+np.exp(solution.x[2]+solution.x[3]*df.LTV_LR))
   df.loc[df.segment==i, 'p0']       = np.exp(solution.x[0]+solution.x[1]*df.LTV_0)/(1+np.exp(solution.x[0]+solution.x[1]*df.LTV_0))
   df.loc[df.segment==i, 'p1']       = np.exp(solution.x[4]+solution.x[5]*df.LTV_1)/(1+np.exp(solution.x[4]+solution.x[5]*df.LTV_1))

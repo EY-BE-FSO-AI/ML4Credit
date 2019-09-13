@@ -8,7 +8,7 @@ import scipy.stats       as stat
 os.chdir("..")    #Move back to the src folder
 # Load the data
 df1        = pd.DataFrame({'Y': pd.read_csv(os.getcwd()+"\data\Y.csv").iloc[:,1]})
-df2        = pd.read_csv(os.getcwd()+"\data\X.csv")
+df2        = pd.read_csv(os.getcwd()+"\data\X.csv").iloc[:,1:]
 df         = df1.join(df2)
 df['Y_Z']  = stat.norm.ppf(stat.rankdata(df.Y)/(len(df.Y)+1))
 
@@ -52,6 +52,5 @@ df = pd.merge(df, np.log((df.groupby(['segment','deciles_'])['Y1'].count()+1-df.
 df = pd.merge(df, np.log((df.groupby(['segment','deciles'])['Y'].mean() + 0.0001)/(1-(df.groupby(['segment','deciles'])['Y'].mean() + 0.0001))) \
      .reset_index(name='LTV_LR'), on=['segment', 'deciles'], how='inner')
 
-
 # Output model dataset
-df[['Y', 'Y_Z', 'LTV', 'LTV_Z', 'LTV_LR', 'LTV_1', 'LTV_0', 'segment']].to_csv(os.getcwd()+r'\features\LGD_model_dataset.csv')
+df[['Y', 'training', 'Y_Z', 'LTV', 'LTV_Z', 'LTV_LR', 'LTV_1', 'LTV_0', 'segment']].to_csv(os.getcwd()+r'\features\LGD_model_dataset.csv')

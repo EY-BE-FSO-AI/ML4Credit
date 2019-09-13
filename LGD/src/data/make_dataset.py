@@ -11,7 +11,9 @@ os.chdir("..")    #Move back to the src folder
 df = pd.read_csv(os.getcwd()+r'\data\lgd.csv', sep=",")
 
 # Rename column
-df['Y'] = df.lgd_time.apply(lambda x: 0 if x<0.001 else 1 if x>0.999 else x)
+df['Y']        = df.lgd_time.apply(lambda x: 0 if x<0.001 else 1 if x>0.999 else x)
+np.random.seed(123)
+df['training'] = df.lgd_time.apply(lambda x: 0 if np.random.uniform()<0.2 else 1)
 
 # Plot distribution and features
 for i in ['Y', 'LTV', 'event', 'purpose1']:
@@ -19,8 +21,8 @@ for i in ['Y', 'LTV', 'event', 'purpose1']:
     plt.show()
 
 # Output Y dataset and X dataset
-df.Y.to_csv(os.getcwd()+r'\data\Y.csv')
-df[['LTV', 'event', 'purpose1']].to_csv(os.getcwd()+r'\data\X.csv')
+df.Y.to_csv(os.getcwd()+r'\data\Y.csv', header='Y')
+df[['training', 'LTV', 'event', 'purpose1']].to_csv(os.getcwd()+r'\data\X.csv')
 
 # Compare Kernel Density with the calibrated Beta Density
 fit_k   = stat.gaussian_kde(df.Y) 
