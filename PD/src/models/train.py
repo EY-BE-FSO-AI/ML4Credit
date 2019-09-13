@@ -287,7 +287,7 @@ def evaluate_perf(y_validation, predictions_validation):
     # Conf Matrix
     # --------------------------------------------------------------------------------------
     conf_mat = confusion_matrix(y_validation, predictions_validation >= 0.5, labels=y_validation.value_counts().index)
-    figSize = np.round(len(y_validation.value_counts().index)/1.2)
+    figSize = (10,10)
     matplotlib.pyplot.style.use('classic')
     fig = matplotlib.pyplot.figure(figsize=(figSize, figSize))
     plot_confusion_matrix(conf_mat, classes=y_validation.value_counts().index, normalizeText='No')
@@ -469,7 +469,7 @@ def main():
     predictions_train = []
     features_scores = {}
 
-    for i in range(2):
+    for i in range(10):
         model = train_model(X_train=X,
                             y_train=y,
                             X_validation=X_validation,
