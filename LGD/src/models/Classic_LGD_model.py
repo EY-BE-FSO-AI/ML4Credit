@@ -98,3 +98,27 @@ ax.set_ylabel('Y')
 plt.show(plt.title('2D Gaussian Kernel density estimation'))
 
 df.to_csv(os.getcwd()+r'\models\LGD_model_dataset_output.csv')
+
+
+
+
+# IRB test statistics
+from irb_tests.lgd_irb_tests import LGD_tests, gAUC, matrix, cut
+lgdtests_obj = LGD_tests()
+# Backtesting
+var, t_stat, p_val  = lgdtests_obj.backtesting(df, 'LGD_hat', 'Y')
+print('Backtesting -> Variance: {v}; T-statistic: {t}; P-value: {p}'.format(v=var, t=t_stat, p=p_val))
+backtesting_per_bin_res = lgdtests_obj.backtesting_facilityGrade(df, 'LGD_hat', 'Y', bin_label='deciles')
+# Population stability index
+psi = lgdtests_obj.psi_lgd(df, 'LGD_hat', 'Y', bin_label='deciles')
+print('Population stability index: {p}'.format(p=psi))
+# generalized AUC
+segments = [(0, 0.05, 'both' ), (0.05, 0.1, 'right'), (0.1, 0.2, 'right'), (0.2, 0.3, 'right'), (0.3, 0.4, 'right'),
+            (0.4, 0.5, 'right'), (0.5, 0.6, 'right'), (0.6, 0.7, 'right'), (0.7, 0.8, 'right'), (0.8, 0.9, 'right'),
+            (0.9, 1, 'neither'), (1, 1.1, 'left')]  # IRB recommands these segments for cont LGD
+df['bin_LGD_hat'] = cut( df['LGD_hat'], segments)
+df['bin_Y'] = cut(df['Y'], segments)
+tranisition_matrix = matrix().matrix_obs(data=df, x='bin_LGD_hat', y='bin_Y', z=None)
+tranisition_matrix_freq = matrix().matrix_prob(tranisition_matrix)
+gauc_obj = gAUC(transMatrix=tranisition_matrix_freq)
+print('Generalised AUC (gAUC, variance): ', gauc_obj.compute_gAUC_s())
