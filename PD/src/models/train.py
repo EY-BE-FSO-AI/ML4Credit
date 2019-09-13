@@ -6,7 +6,7 @@ import optparse
 import pandas as pd
 import pandas_profiling
 from sklearn.model_selection import StratifiedKFold
-
+import matplotlib
 import pickle
 from sklearn import metrics
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
@@ -238,8 +238,7 @@ def get_class_weights(y):
 def train_model(X_train, y_train, X_validation, y_validation, categorical_features_pos, use_proba_calibration=False, random_seed=RANDOM_SEED, golden_features_pos=[]):
     print ('-----------------------------------  Training ...')
     model = CatBoostClassifier(
-        #n_estimators=700,
-        #learning_rate=0.1,
+        learning_rate=0.4,
         depth=4,
         loss_function='Logloss',
         random_seed=random_seed,
@@ -268,7 +267,34 @@ def train_model(X_train, y_train, X_validation, y_validation, categorical_featur
     print(model.get_params())
     return model
 
-                         
+def evaluate_perf(y_validation, predictions_validation):
+    prfs = precision_recall_fscore_support(y_validation.values, predictions_validation>=0.5, average='binary')
+    print ('prfs: ', prfs)
+    fpr, tpr, thresholds = metrics.roc_curve(y_validation, predictions_validation)
+    roc_auc = metrics.auc(fpr, tpr)
+    accuracy = metrics.accuracy_score(y_validation, predictions_validation >= 0.5, normalize=True, sample_weight=None)
+    print('AUC = %f' % roc_auc)
+    print('precision_recall_fscore_support: ', prfs)
+    print('Accuracy: ', accuracy)
+
+    # --------------------------------------------------------------------------------------
+    # ROC & PR curves
+    # --------------------------------------------------------------------------------------
+    plot_ROC(y_validation, predictions_validation, 0)
+    plot_PR(y_validation, predictions_validation, 0)
+
+    # --------------------------------------------------------------------------------------
+    # Conf Matrix
+    # --------------------------------------------------------------------------------------
+    conf_mat = confusion_matrix(y_validation, predictions_validation >= 0.5, labels=y_validation.value_counts().index)
+    figSize = np.round(len(y_validation.value_counts().index)/1.2)
+    matplotlib.pyplot.style.use('classic')
+    fig = matplotlib.pyplot.figure(figsize=(figSize, figSize))
+    plot_confusion_matrix(conf_mat, classes=y_validation.value_counts().index, normalizeText='No')
+    matplotlib.pyplot.savefig('conf_matrix.png', bbox_inches='tight')
+    matplotlib.pyplot.close(fig)  
+
+    
 def main():
     global numerical_features, categorical_features, date_features
     parser = optparse.OptionParser()
@@ -350,6 +376,7 @@ def main():
         pd.DataFrame(y).to_csv('y_train_dataset.csv', escapechar ='\\', quotechar='"', encoding='utf-8')
         pd.DataFrame(y_validation).to_csv('y_validation_dataset.csv', escapechar ='\\', quotechar='"', encoding='utf-8')
 
+    
     # --------------------------------------------------------------------------------------
     # Remove irrelevant features
     # --------------------------------------------------------------------------------------
@@ -361,6 +388,9 @@ def main():
     X = X.drop(X[X.LoanAge < 0].index)
     y_validation = y_validation.drop(X_validation[X_validation.LoanAge < 0].index)
     X_validation = X_validation.drop(X_validation[X_validation.LoanAge < 0].index)
+
+    X_loans_ids = X[id_column]
+    X_validation_loans_ids = X_validation[id_column]
 
     # --------------------------------------------------------------------------------------
     # Replace missing values
@@ -439,7 +469,7 @@ def main():
     predictions_train = []
     features_scores = {}
 
-    for i in range(10):
+    for i in range(2):
         model = train_model(X_train=X,
                             y_train=y,
                             X_validation=X_validation,
@@ -478,24 +508,15 @@ def main():
     predictions_validation = np.mean(predictions_validation, axis=0)
     print ('predictions_train: ', predictions_train)
     print ('predictions_validation: ', predictions_validation)
-    pd.DataFrame({'pb_default': predictions_train}).to_csv('predictions_train.csv')
-    pd.DataFrame({'pb_default': predictions_validation}).to_csv('predictions_validation.csv')
-
-    prfs = precision_recall_fscore_support(y_validation.values, predictions_validation>=0.5, average='binary')
-    print ('prfs: ', prfs)
-    fpr, tpr, thresholds = metrics.roc_curve(y_validation, predictions_validation)
-    roc_auc = metrics.auc(fpr, tpr)
-    accuracy = metrics.accuracy_score(y_validation, predictions_validation >= 0.5, normalize=True, sample_weight=None)
-    print('AUC = %f' % roc_auc)
-    print('precision_recall_fscore_support: ', prfs)
-    print('Accuracy: ', accuracy)
+    pd.DataFrame({id_column: X_loans_ids, 'pb_default': predictions_train}).to_csv('predictions_train.csv')
+    pd.DataFrame({id_column: X_validation_loans_ids, 'pb_default': predictions_validation}).to_csv('predictions_validation.csv')
 
     # --------------------------------------------------------------------------------------
-    # ROC & PR curves
+    # evaluate perf
     # --------------------------------------------------------------------------------------
-    plot_ROC(y_validation, predictions_validation, 0)
-    plot_PR(y_validation, predictions_validation, 0)
-
+    evaluate_perf(y_validation, predictions_validation)
+ 
+        
     if not options.run_cross_validation:
         exit()
         
@@ -503,7 +524,7 @@ def main():
     # Cross validate using the best found classifier
     # --------------------------------------------------------------------------------------
     params = {
-        #'learning_rate':0.1,
+        'learning_rate':0.4,
         'depth': 4,
         'loss_function': 'Logloss',
         'random_seed': RANDOM_SEED,
