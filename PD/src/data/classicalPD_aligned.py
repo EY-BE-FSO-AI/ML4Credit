@@ -464,30 +464,30 @@ if __name__ == "__main__":
     covariates_final = results.pvalues[results.pvalues < 0.01].index.tolist()
     logit_model_proc, results_proc = run_logit(y_train, covariates_woe[covariates_final])
 
-    # # Save the model inputes (i.e. WOEs), default flag and outputs (i.e. PDs) to a separate .xlsx file.
-    # X_train_proc = X_train[covariates_final]
-    # X_train_proc[X_train_proc.select_dtypes('category').columns] = X_train_proc.select_dtypes('category').astype('float')  # convert to numeric
-    # X_train_proc = map_var_to_woe(X_train_proc, coarse_woe)
-    # X_train_proc = X_train_proc.add_suffix('_WOE') # Add WOE as suffix.
-    #
-    # pred_train = pd.DataFrame({"Prediction": results_proc.predict(X_train_proc)})
-    #
-    # X_test_proc = X_test[covariates_final]
-    # X_test_proc[X_test_proc.select_dtypes('category').columns] = X_test_proc.select_dtypes('category').astype('float')  # convert to numeric
-    # X_test_proc = map_var_to_woe(X_test_proc, coarse_woe)
-    # X_test_proc = X_train_proc.add_suffix('_WOE')  # Add WOE as suffix.
-    #
-    # pred_test = pd.DataFrame({"Prediction": results_proc.predict(X_test_proc)})
-    #
-    # df_results_train = pd.concat([X_train_proc, y_train, pred_train], axis=1)
-    # df_results_test = pd.concat([X_test_proc, y_test, pred_test], axis=1)
-    #
-    # writer = pd.ExcelWriter('model_results.xlsx', engine='xlsxwriter')
-    #
-    # df_results_train.to_excel(writer, sheet_name='Train')
-    # df_results_test.to_excel(writer, sheet_name='Test')
-    # writer.save()
-    # writer.close()
+    # Save the model inputes (i.e. WOEs), default flag and outputs (i.e. PDs) to a separate .xlsx file.
+    X_train_proc = X_train[covariates_final]
+    X_train_proc[X_train_proc.select_dtypes('category').columns] = X_train_proc.select_dtypes('category').astype('float')  # convert to numeric
+    X_train_proc = map_var_to_woe(X_train_proc, coarse_woe)
+    X_train_proc = X_train_proc.add_suffix('_WOE') # Add WOE as suffix.
+
+    pred_train = pd.DataFrame({"Prediction": results_proc.predict(X_train_proc)})
+
+    X_test_proc = X_test[covariates_final]
+    X_test_proc[X_test_proc.select_dtypes('category').columns] = X_test_proc.select_dtypes('category').astype('float')  # convert to numeric
+    X_test_proc = map_var_to_woe(X_test_proc, coarse_woe)
+    X_test_proc = X_train_proc.add_suffix('_WOE')  # Add WOE as suffix.
+
+    pred_test = pd.DataFrame({"Prediction": results_proc.predict(X_test_proc)})
+
+    df_results_train = pd.concat([X_train.LoanID, X_train_proc, y_train, pred_train], axis=1)
+    df_results_test = pd.concat([X_test.LoanID, X_test_proc, y_test, pred_test], axis=1)
+
+    writer = pd.ExcelWriter('model_results.xlsx', engine='xlsxwriter')
+
+    df_results_train.to_excel(writer, sheet_name='Train')
+    df_results_test.to_excel(writer, sheet_name='Test')
+    writer.save()
+    writer.close()
 
     # Write parameters to Excel
     writer = pd.ExcelWriter('coefficients.xlsx', engine='xlsxwriter')
