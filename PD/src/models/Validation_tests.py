@@ -7,12 +7,19 @@ from scipy.stats          import binom
 from scipy.stats          import t
 
 # Import ML output
-df_ML                = pd.read_csv(os.getcwd()+'\predictions_train.csv').iloc[:, 1:]
-df_ML['training']    = 1
-df_dummy             = pd.read_csv(os.getcwd()+'\predictions_validation.csv').iloc[:, 1:]
-df_dummy['training'] = 0
-df_ML                = df_ML.append(df_dummy).sort_values(by='LoanID').reset_index().iloc[:, 1:]
-df_ML['default']     = np.random.uniform()     #TO BE REPLACED BY THE ACTUAL DEFAULT FLAG
+df_ML                    = pd.read_csv(os.getcwd()+'\predictions_train.csv').iloc[:, 1:]
+df_ML['training']        = 1
+df_dummy_ML              = pd.read_csv(os.getcwd()+'\predictions_validation.csv').iloc[:, 1:]
+df_dummy_ML['training']  = 0
+df_ML                    = df_ML.append(df_dummy_ML).sort_values(by='LoanID').reset_index().iloc[:, 1:]
+df_ML['default']         = np.random.uniform()     #TO BE REPLACED BY THE ACTUAL DEFAULT FLAG
+# Import Classical output
+df_CL                    = pd.read_excel(os.getcwd()+'\predictions_classical.xlsx', sheet_name='Train')
+df_CL['training']        = 1
+df_dummy_CL              = pd.read_excel(os.getcwd()+'\predictions_classical.xlsx', sheet_name='Test')
+df_dummy_CL['training']  = 0
+#df_CL                    = df_CL.append(df_dummy_CL).sort_values(by='LoanID').reset_index().iloc[:, 1:]
+
 
 # Master Scale
 ratings            = 22                                                                           #Number of rating grades
