@@ -475,7 +475,7 @@ if __name__ == "__main__":
     X_test_proc = X_test[covariates_final]
     X_test_proc[X_test_proc.select_dtypes('category').columns] = X_test_proc.select_dtypes('category').astype('float')  # convert to numeric
     X_test_proc = map_var_to_woe(X_test_proc, coarse_woe)
-    X_test_proc = X_train_proc.add_suffix('_WOE')  # Add WOE as suffix.
+    X_test_proc = X_test_proc.add_suffix('_WOE')  # Add WOE as suffix.
 
     pred_test = pd.DataFrame({"Prediction": results_proc.predict(X_test_proc)})
 
@@ -484,8 +484,10 @@ if __name__ == "__main__":
 
     writer = pd.ExcelWriter('model_results.xlsx', engine='xlsxwriter')
 
-    df_results_train.to_excel(writer, sheet_name='Train')
-    df_results_test.to_excel(writer, sheet_name='Test')
+    #df_results_train.to_excel(writer, sheet_name='Train')
+    #df_results_test.to_excel(writer, sheet_name='Test')
+    df_results_train.to_csv('predictions_train_cl.csv', index = None, header=True)
+    df_results_test.to_csv('predictions_validation_cl.csv', index = None, header=True)
     writer.save()
     writer.close()
 
