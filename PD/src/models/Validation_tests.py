@@ -70,9 +70,9 @@ class PD_tests(object):
      def ROC_curve(self, df, prediction, default):
           df_train = df[df.training == 1]
           df_valid = df[df.training == 0]
-          fpr_train, tpr_train, thresholds = roc_curve(list(df_train[default].values), list(df_train[prediction].values))
-          fpr_valid, tpr_valid, thresholds = roc_curve(list(df_valid[default].values), list(df_valid[prediction].values))
-          return fpr_train, tpr_train, fpr_valid, tpr_valid
+          fpr_train, tpr_train = roc_curve(list(df_train[default].values), list(df_train[prediction].values))
+          fpr_valid, tpr_valid = roc_curve(list(df_valid[default].values), list(df_valid[prediction].values))
+          return fpr_train, tpr_train, fpr_valid, tpr_valid, thresholds
 
 acc_ML = PD_tests().Jeffrey(df_ML, 'rating_PD', 'pb_default', 'default')
 acc_CL = PD_tests().Jeffrey(df_CL, 'rating_PD', 'pb_default', 'default')
@@ -94,14 +94,14 @@ sns.set_style("darkgrid", {'font.family': ['EYInterstate']})
 """
 
 plt.figure(1)
-diag_line = np.linspace(0, 1, len(df_train_cl))
+diag_line = np.linspace(0, 1, 10)
 plt.plot(diag_line, diag_line, linestyle='--', c='darkgrey')
 plt.plot(fpr_ML_valid, tpr_ML_valid, label = "ML (Validation)" + ' : AUC = %0.4f' % auc(fpr_ML_valid,tpr_ML_valid), color='darkblue')
 plt.plot(fpr_ML_train, tpr_ML_train, label = "ML (Training)" + ' : AUC = %0.4f' % auc(fpr_ML_train, tpr_ML_train), color='darkblue', ls='--')
 plt.plot(fpr_CL_valid, tpr_CL_valid, label = "CL (Validation)" + ' : AUC = %0.4f' % auc(fpr_CL_valid, tpr_CL_valid), color='green')
 plt.plot(fpr_CL_train, tpr_CL_train, label = "CL (Training)" + ' : AUC = %0.4f' % auc(fpr_CL_train, tpr_CL_train), color='green', ls='--')
-plt.xlabel('True positive rate')
-plt.ylabel('False positive rate')
+plt.xlabel('False positive rate')
+plt.ylabel('True positive rate')
 plt.title('Lorenz curve')
 plt.legend(loc=4)
 
