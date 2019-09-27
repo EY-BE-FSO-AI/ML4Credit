@@ -44,6 +44,7 @@ Glossary mapping
 import pandas as pd
 import numpy as np
 import datetime as dt
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 
 # Import datasets, select features and define the default-flag collumn.
@@ -63,7 +64,7 @@ perf_type_map = {'LoanID': 'int64', 'Servicer': 'category', 'CurrInterestRate': 
                  'NIBUPB': 'float32', 'PFUPB': 'float32', 'RMWPF': 'category', 'FPWA': 'float32',
                  'ServicingIndicator': 'category'}
 
-extended_selec_per = col_per
+extended_selec_per = ['LoanID', 'MonthRep', 'CLDS']
 
 col_per_subset = extended_selec_per
 
@@ -246,18 +247,40 @@ def traintest_split(observation_frame, testsize=0.2):
     X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=testsize, random_state=1)
     return X_train, X_test, y_train, y_test
 
-if __name__ == "__main__":
-    # Read the file Performance_HARP.txt: http://www.fanniemae.com/portal/funding-the-market/data/loan-performance-data.html
-    performance_frame = read_file(file_name='Data/Performance_HARP.txt', ref_year=['2016', '2017', '2018'],
-                                  lines_to_read=1e6)
-    # Define your snapshot dates for your observation frame:
-    date_list = ['03/01/2016', '06/01/2016', '09/01/2016', '12/01/2016', '03/01/2017', '06/01/2017', '09/01/2017',
-                 '12/01/2017']
-    pre_frame = pd.concat([create_12mDefault(d, performance_frame) for d in date_list])
-    # Remove observations with several defaults:
-    pre_frame = remove_default_dupl(pre_frame)
-    # Sampling
-    observation_frame = sample_wo_duplicates(pre_frame)
-    # observation_frame = select_sample(pre_frame)
-    # Train/test split
-    X_train, X_test, y_train, y_test = traintest_split(observation_frame)
+df = pd.read_csv('Data/Performance_HARP.txt', sep='|', names=col_per, dtype=perf_type_map, usecols=col_per_subset, index_col=False,
+                     nrows=None)
+
+"""
+    Exploratory analysis:
+    Remove number of dates where we do not count any defaults based on CLDS >= 3.
+"""
+# exclusion_dates = ['04/01/2009', '05/01/2009', '06/01/2009', '07/01/2009', '08/01/2009']
+# #df = df[~df['date'].isin(exclusion_dates)]
+#
+# df['CLDS'] = df.CLDS.replace('X', '1').astype('float')
+#
+# missing_LoanID = df['LoanID'].isna().sum()
+# missing_CLDS = df['CLDS'].isna().sum()
+#
+# df_count_pop = df[['LoanID','MonthRep']].groupby(["MonthRep"]).count()
+# df_count_def = df[df.CLDS >= 3].groupby(["MonthRep"]).count().drop("CLDS", axis=1)
+#
+# snapshots_without_default = np.setdiff1d(df_count_pop.index.values.tolist(),df_count_def.index.values.tolist())
+
+
+
+# if __name__ == "__main__":
+#     # Read the file Performance_HARP.txt: http://www.fanniemae.com/portal/funding-the-market/data/loan-performance-data.html
+#     performance_frame = read_file(file_name='Data/Performance_HARP.txt', ref_year=['2016', '2017', '2018'],
+#                                   lines_to_read=1e6)
+#     # Define your snapshot dates for your observation frame:
+#     date_list = ['03/01/2016', '06/01/2016', '09/01/2016', '12/01/2016', '03/01/2017', '06/01/2017', '09/01/2017',
+#                  '12/01/2017']
+#     pre_frame = pd.concat([create_12mDefault(d, performance_frame) for d in date_list])
+#     # Remove observations with several defaults:
+#     pre_frame = remove_default_dupl(pre_frame)
+#     # Sampling
+#     observation_frame = sample_wo_duplicates(pre_frame)
+#     # observation_frame = select_sample(pre_frame)
+#     # Train/test split
+#     X_train, X_test, y_train, y_test = traintest_split(observation_frame)
