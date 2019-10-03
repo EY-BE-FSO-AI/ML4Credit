@@ -39,7 +39,9 @@ from scipy import stats
 import seaborn as sns
 from catboost import cv
 from catboost import Pool
-
+from sklearn.calibration import calibration_curve
+from sklearn.ensemble import BaseEnsemble
+import random
 
 categorical_features = ['ServicingIndicator',  'RMWPF', 'Servicer', 'ZeroBalCode', 'ModFlag', 'MSA']
 
@@ -54,6 +56,82 @@ bool_features = []
 target_column = 'Default'
 id_column = 'LoanID'
 RANDOM_SEED = 1
+
+
+class EnsembleModel(BaseEnsemble):
+    def __init__(self, n_estimators, positive_class_name, target):
+        self.n_estimators=n_estimators
+        self.positive_class_name=positive_class_name
+        self.target=target
+        self.models=[]
+        
+    def extract_labeled_rows(self, X, y, labels):
+        return X.loc[y.isin(labels)]
+
+    def sample(self, df, number_of_lines, random_state):
+        return df.sample(number_of_lines, random_state=random_state, replace=False)
+    
+    def fit(self,X_train, y_train, cat_features=None, X_validation=None, y_validation=None, use_best_model=None, early_stopping_rounds=None, verbose=True):
+        X_1 = self.extract_labeled_rows(X_train, y_train, [1])
+        X_0 = self.extract_labeled_rows(X_train, y_train, [0])
+    
+        for i in range(self.n_estimators):
+            #generate random
+            f = 1#random.randint(1, 6)
+            X_0_sample = self.sample(X_0, len(X_1) * f, random_state=i)
+            print ('X_1: ', len(X_1))
+            print ('X_0_sample: ', len(X_0_sample))
+            #concat data
+            X_undersampled = pd.concat([X_0_sample, X_1])
+            new_model = CatBoostClassifier(
+                #learning_rate=0.1,
+                depth=3,
+                loss_function='Logloss',
+                random_seed=RANDOM_SEED,
+                class_weights=[1, f],
+                eval_metric = 'AUC', 
+                custom_metric=['F1', 'Precision', 'Recall', 'AUC:hints=skip_train~false'],
+                boosting_type='Plain',
+                od_type='Iter',
+                #od_pval=0.000001,
+                od_wait=20,
+                thread_count=8
+            )    
+            new_model.fit(
+                X_undersampled, 
+                [0]*len(X_0_sample)+[1]*len(X_1),
+                cat_features=cat_features,
+                eval_set=(X_validation, y_validation), 
+                use_best_model=True,
+                early_stopping_rounds=100,
+                verbose=False
+            )
+
+            fpr, tpr, thresholds = metrics.roc_curve(y_validation, new_model.predict_proba(X_validation)[:,1])
+            roc_auc = metrics.auc(fpr, tpr)
+            print ('Roc_auc_%d: '%(i), roc_auc) 
+
+            self.models.append(new_model)
+        return self
+
+    def predict(self, X):
+        predictions = []
+        for model in self.models:
+            predictions += model.predict(X)
+        predictions = predictions/self.n_estimators
+        return predictions
+
+    def predict_proba(self, X):
+        predictions = None
+        for model in self.models:
+            tmp_pred = model.predict_proba(X)
+            if predictions is None:
+                predictions = tmp_pred
+            else:
+                predictions += tmp_pred
+        predictions = predictions/self.n_estimators
+        return predictions
+
 
 
 def concat_features(df_text_features, df_numerical_features, df_cat_features):
@@ -233,39 +311,66 @@ def get_class_weights(y):
     
     class_weights = [1, c_label[0]*1.0/c_label[1]]
     print ('Class weights: ', class_weights)
-    return class_weights
+    return class_weights, c_label[0], c_label[1]
+
+
+def reliability_curve(models, X_validation, y_validation):
+    plt.figure(figsize=(9, 9))
+    ax1 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
+    ax2 = plt.subplot2grid((3, 1), (2, 0))
+
+    ax1.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
+    for clf, name in models:
+        if hasattr(clf, "predict_proba"):
+            prob_pos = clf.predict_proba(X_validation)[:, 1]
+        else:  # use decision function
+            prob_pos = clf.decision_function(X_validation)
+            prob_pos = \
+                (prob_pos - prob_pos.min()) / (prob_pos.max() - prob_pos.min())
+        fraction_of_positives, mean_predicted_value = \
+            calibration_curve(y_validation, prob_pos, n_bins=10)
+
+        ax1.plot(mean_predicted_value, fraction_of_positives, "s-",
+                 label="%s" % (name, ))
+
+        ax2.hist(prob_pos, range=(0, 1), bins=10, label=name,
+                 histtype="step", lw=2)
+
+    ax1.set_ylabel("Fraction of positives")
+    ax1.set_ylim([-0.05, 1.05])
+    ax1.legend(loc="lower right")
+    ax1.set_title('Calibration plots  (reliability curve)')
+
+    ax2.set_xlabel("Mean predicted value")
+    ax2.set_ylabel("Count")
+    ax2.legend(loc="upper center", ncol=2)
+    plt.tight_layout()
+    plt.savefig('reliability_curve.png')
+
 
 def train_model(X_train, y_train, X_validation, y_validation, categorical_features_pos, use_proba_calibration=False, random_seed=RANDOM_SEED, golden_features_pos=[]):
     print ('-----------------------------------  Training ...')
-    model = CatBoostClassifier(
-        learning_rate=0.4,
-        depth=4,
-        loss_function='Logloss',
-        random_seed=random_seed,
-        class_weights=get_class_weights(y_train),
-        eval_metric = 'AUC', 
-        custom_metric=['F1', 'Precision', 'Recall', 'AUC:hints=skip_train~false'],
-        boosting_type='Plain',
-        od_type='Iter',
-        #od_pval=0.000001,
-        od_wait=20,
-        thread_count=8,
-        per_float_feature_quantization=['%i:border_count=1024'%pos for pos in golden_features_pos]
-    )
-	
-    model.fit(
+    class_weights, count_0, count_1 = get_class_weights(y_train)
+    print ('Count 0: ', count_0)
+    print ('Count 1: ', count_1)
+
+    ensemble_model = EnsembleModel(n_estimators=100, 
+                                   positive_class_name=1, 
+                                   target=target_column,
+                                   )
+    ensemble_model.fit(
         X_train, 
         y_train,
         cat_features=categorical_features_pos,
-        eval_set=(X_validation, y_validation),
+        X_validation=X_validation, 
+        y_validation=y_validation,
         use_best_model=True,
         early_stopping_rounds=100,
-        verbose=True,
+        verbose=False,
 	)
-    print('Model is fitted: ' + str(model.is_fitted()))
-    print('Model params:')
-    print(model.get_params())
-    return model
+
+        
+    return ensemble_model
 
 def evaluate_perf(y_validation, predictions_validation):
     prfs = precision_recall_fscore_support(y_validation.values, predictions_validation>=0.5, average='binary')
@@ -286,13 +391,13 @@ def evaluate_perf(y_validation, predictions_validation):
     # --------------------------------------------------------------------------------------
     # Conf Matrix
     # --------------------------------------------------------------------------------------
-    conf_mat = confusion_matrix(y_validation, predictions_validation >= 0.5, labels=y_validation.value_counts().index)
-    figSize = (10,10)
-    matplotlib.pyplot.style.use('classic')
-    fig = matplotlib.pyplot.figure(figsize=(figSize, figSize))
-    plot_confusion_matrix(conf_mat, classes=y_validation.value_counts().index, normalizeText='No')
-    matplotlib.pyplot.savefig('conf_matrix.png', bbox_inches='tight')
-    matplotlib.pyplot.close(fig)  
+    #conf_mat = confusion_matrix(y_validation, predictions_validation >= 0.5, labels=y_validation.value_counts().index)
+    #figSize = (10,10)
+    #matplotlib.pyplot.style.use('classic')
+    #fig = matplotlib.pyplot.figure(figsize=(figSize, figSize))
+    #plot_confusion_matrix(conf_mat, classes=y_validation.value_counts().index, normalizeText='No')
+    #matplotlib.pyplot.savefig('conf_matrix.png', bbox_inches='tight')
+    #matplotlib.pyplot.close(fig)  
 
     
 def main():
@@ -392,17 +497,6 @@ def main():
     X_loans_ids = X[id_column]
     X_validation_loans_ids = X_validation[id_column]
 
-    # --------------------------------------------------------------------------------------
-    # Replace missing values
-    # --------------------------------------------------------------------------------------
-    print ('replacing missing values')
-    X = replace_missing_values(X)
-    X_validation = replace_missing_values(X_validation)
-    
-    print ('Tracking missing values X: ', X.isnull().sum(axis=0))
-    
-    # checking for duplicate records
-    print ('Check for duplicate records: ', X.duplicated().sum())
     
 
     # --------------------------------------------------------------------------------------
@@ -415,12 +509,24 @@ def main():
     
 
     # --------------------------------------------------------------------------------------
+    # Replace missing values
+    # --------------------------------------------------------------------------------------
+    print ('replacing missing values')
+    X = replace_missing_values(X)
+    X_validation = replace_missing_values(X_validation)
+    
+    print ('Tracking missing values X: ', X.isnull().sum(axis=0))
+    
+    # checking for duplicate records
+    print ('Check for duplicate records: ', X.duplicated().sum())
+
+    # --------------------------------------------------------------------------------------
     # Create correlation graph
     # --------------------------------------------------------------------------------------
     print ('Correlation matrix')
     plt.figure(figsize=(16,16))
     sns.heatmap(X.corr(), annot=True, fmt=".2f")
-    plt.savefig('.\\correlation.png', bbox_inches='tight')
+    plt.savefig('correlation.png', bbox_inches='tight')
 
     # --------------------------------------------------------------------------------------
     # Generating pandas profiling report
@@ -469,43 +575,18 @@ def main():
     predictions_train = []
     features_scores = {}
 
-    for i in range(10):
-        model = train_model(X_train=X,
-                            y_train=y,
-                            X_validation=X_validation,
-                            y_validation=y_validation,
-                            use_proba_calibration=options.use_proba_calibration,
-                            categorical_features_pos=categorical_features_pos,
-                            random_seed=i,
-                            golden_features_pos = [X.columns.get_loc('LoanAge'), X.columns.get_loc('CLDS')]
-                           )
-        predictions_validation.append(model.predict_proba(X_validation)[:,1])
-        predictions_train.append(model.predict_proba(X)[:,1])
-        train_score = model.score(X, y) # train score
-        validation_score = model.score(X_validation, y_validation) # validation score
-        print ('####################### train score: ', train_score)
-        print ('####################### validation score: ', validation_score)
-        print ('####################### model best score: ', model.get_best_score())
-
-        # features importance
-        feature_score = pd.DataFrame(list(zip(X.dtypes.index, model.get_feature_importance(Pool(X, label=y, cat_features=categorical_features_pos)))), columns=['Feature','Score'])
-        feature_score = feature_score.sort_values(by='Score', ascending=False, inplace=False, kind='quicksort', na_position='last')
-        print ('feature_score: ', feature_score.head(20))
-        for f, s in zip(feature_score.Feature, feature_score.Score): 
-            if f in features_scores:
-                features_scores[f] += s
-            else:
-                features_scores[f] = s
-        print ('features_scores: ', features_scores)
-
-    # avg features score
-    avg_feature_score = pd.DataFrame.from_dict({k: v/i for k, v in features_scores.items()}, orient='index', columns=['Score']) 
-    avg_feature_score = avg_feature_score.sort_values(by='Score', ascending=False, inplace=False, kind='quicksort', na_position='last')
-    avg_feature_score.to_csv('avg_feature_score.csv')
-
-    # avg perf
-    predictions_train = np.mean(predictions_train, axis=0)
-    predictions_validation = np.mean(predictions_validation, axis=0)
+    model = train_model(X_train=X,
+                        y_train=y,
+                        X_validation=X_validation,
+                        y_validation=y_validation,
+                        use_proba_calibration=options.use_proba_calibration,
+                        categorical_features_pos=categorical_features_pos,
+                        random_seed=RANDOM_SEED,
+                        golden_features_pos = [X.columns.get_loc('LoanAge'), X.columns.get_loc('CLDS')]
+                       )
+    reliability_curve(models=[(model, 'ensemble_catboost')], X_validation=X_validation, y_validation=y_validation)    
+    predictions_validation = model.predict_proba(X_validation)[:,1]
+    predictions_train = model.predict_proba(X)[:,1]
     print ('predictions_train: ', predictions_train)
     print ('predictions_validation: ', predictions_validation)
     pd.DataFrame({id_column: X_loans_ids, 'pb_default': predictions_train}).to_csv('predictions_train.csv')
@@ -560,7 +641,7 @@ def main():
         partition_random_seed=0,
         plot=False,
         stratified=True,
-        verbose=True        
+        verbose=False        
     )
     
     print_cv_summary(cv_data)
