@@ -15,7 +15,7 @@ col_per = ['LoanID','MonthRep','Servicer','CurrInterestRate','CAUPB','LoanAge','
           'ATFHP','NetSaleProceeds','CreditEnhProceeds','RPMWP','OFP','NIBUPB','PFUPB','RMWPF',
           'FPWA','ServicingIndicator'] 
           
-sel_col_per = ['LoanID', 'MonthRep', 'CurrInterestRate', 'MaturityDate', 'MSA', 'CLDS']
+sel_col_per = ['LoanID', 'MonthRep', 'CurrInterestRate', 'MaturityDate', 'MSA', 'CLDS', 'CAUPB']
 
 def create_db(db_file):
     print ('Creating sqlite db')
@@ -50,12 +50,12 @@ def load_performance():
         conn = sqlite3.connect('ml4credit.db')
         cur = conn.cursor() 
         cur.execute("""
-CREATE TABLE IF NOT EXISTS performance(LoanID varchar, MonthRep  varchar, CurrInterestRate real, MaturityDate varchar, MSA varchar, CLDS varchar)""")
+CREATE TABLE IF NOT EXISTS performance(LoanID varchar, MonthRep  varchar, CurrInterestRate real, MaturityDate varchar, MSA varchar, CLDS varchar, CAUPB real)""")
         with open('Data\Performance_HARP.txt') as f:
             reader = csv.reader(f, delimiter='|')
             for field in reader:
                 s_fields = [field[col_per.index(x)] for x in sel_col_per]            
-                cur.execute("INSERT INTO performance VALUES (?,?,?,?,?,?);", s_fields)
+                cur.execute("INSERT INTO performance VALUES (?,?,?,?,?,?,?);", s_fields)
         conn.commit()
         conn.close()
 
